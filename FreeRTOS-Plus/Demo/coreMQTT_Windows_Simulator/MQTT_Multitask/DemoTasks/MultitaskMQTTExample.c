@@ -162,7 +162,7 @@
 /**
  * @brief Max number of commands that can be enqueued.
  */
-#define mqttexampleCOMMAND_QUEUE_SIZE                25
+#define mqttagentCOMMAND_QUEUE_LENGTH                25 /*_RB_ Needs moving. */
 
 /**
  * @brief Max number of received publishes that can be enqueued for a task.
@@ -357,18 +357,6 @@ void prvAsyncPublishTask( void * pvParameters );
 void prvSubscribeTask( void * pvParameters );
 
 /**
- * @brief Task used to run the MQTT agent.
- *
- * This task calls MQTTAgent_CommandLoop() in a loop, until MQTTAgent_Terminate()
- * is called. If an error occcurs in the command loop, then it will reconnect the
- * TCP and MQTT connections.
- *
- * @param[in] pvParameters Parameters as passed at the time of task creation. Not
- * used in this example.
- */
-static void prvMQTTAgentTask( void * pvParameters );
-
-/**
  * @brief The main task used in the MQTT demo.
  *
  * After creating the publisher and subscriber tasks, this task will enter a
@@ -437,11 +425,6 @@ static TaskHandle_t xAsyncPublisherTask;
  * @brief Handle for prvSubscribeTask.
  */
 static TaskHandle_t xSubscribeTask;
-
-/**
- * @brief Handle for prvMQTTAgentTask.
- */
-static TaskHandle_t xAgentTask;
 
 /**
  * @brief The network buffer must remain valid for the lifetime of the MQTT context.
@@ -529,7 +512,7 @@ static MQTTStatus_t prvMQTTConnect( MQTTContext_t * pxMQTTContext,
     /* Set MQTT keep-alive period. It is the responsibility of the application
      * to ensure that the interval between Control Packets being sent does not
      * exceed the Keep Alive value. In the absence of sending any other Control
-     * Packets, the Client MUST send a PINGREQ Packet. */
+     * Packets, the Client MUST send a PINGREQ Packet. *//*_RB_ Is this true when using an agent too? */
     xConnectInfo.keepAliveSeconds = mqttexampleKEEP_ALIVE_INTERVAL_SECONDS;
 
     /* Append metrics when connecting to the AWS IoT Core broker. */
@@ -1069,36 +1052,6 @@ static void prvCleanExistingPersistentSession( void )
 
 /*-----------------------------------------------------------*/
 
-static void prvMQTTAgentTask( void * pvParameters )
-{
-    BaseType_t xNetworkResult = pdFAIL;
-    MQTTStatus_t xMQTTStatus = MQTTSuccess;
-    MQTTContext_t * pMqttContext = NULL;
-
-    ( void ) pvParameters;
-
-    do
-    {
-        pMqttContext = MQTTAgent_CommandLoop();
-
-        /* Context is only returned if error occurred. */
-        if( pMqttContext != NULL )
-        {
-            /* Reconnect TCP. */
-            xNetworkResult = prvSocketDisconnect( &xNetworkContext );
-            configASSERT( xNetworkResult == pdPASS );
-            xNetworkResult = prvSocketConnect( &xNetworkContext );
-            configASSERT( xNetworkResult == pdPASS );
-            /* MQTT Connect with a persistent session. */
-            xMQTTStatus = prvMQTTConnect( pMqttContext, false );
-        }
-    } while( pMqttContext );
-
-    vTaskDelete( NULL );
-}
-
-/*-----------------------------------------------------------*/
-
 static void prvMQTTDemoTask( void * pvParameters )
 {
     BaseType_t xNetworkStatus = pdFAIL;
@@ -1107,6 +1060,8 @@ static void prvMQTTDemoTask( void * pvParameters )
     /* This context is used in the call to MQTTAgent_Register(). */
     CommandContext_t initializeContext;
     uint32_t ulNotification = 0;
+    TaskHandle_t xAgentTask;
+
     uint32_t ulExpectedNotifications = mqttexamplePUBLISHER_SYNC_COMPLETE_BIT |
                                        mqttexampleSUBSCRIBE_TASK_COMPLETE_BIT |
                                        mqttexamplePUBLISHER_ASYNC_COMPLETE_BIT;
@@ -1115,8 +1070,6 @@ static void prvMQTTDemoTask( void * pvParameters )
 
     ulGlobalEntryTimeMs = prvGetTimeMs();
 
-    /* Create command queue for processing MQTT commands. */
-    xCommandQueue = xQueueCreate( mqttexampleCOMMAND_QUEUE_SIZE, sizeof( Command_t ) );
     /* Create response queues for each task. */
     xSubscriberResponseQueue = xQueueCreate( mqttexamplePUBLISH_QUEUE_SIZE, sizeof( PublishElement_t ) );
 
@@ -1126,15 +1079,15 @@ static void prvMQTTDemoTask( void * pvParameters )
      * synchronization primitives. */
     xDefaultResponseQueue = xQueueCreate( 1, sizeof( PublishElement_t ) );
 
+
+    xAgentTask = MQTTAgent_CreateAgent( configMINIMAL_STACK_SIZE, configMAX_PRIORITIES - 2, mqttagentCOMMAND_QUEUE_LENGTH );
+    configASSERT( xAgentTask );
+
+
     /* This demo uses a persistent session that can be re-connected if disconnected.
      * Clean any lingering sessions that may exist from previous executions of the
      * demo. */
     prvCleanExistingPersistentSession();
-
-    /* Create the MQTT agent task. This task is only created once and persists
-     * across demo iterations. */
-    xResult = xTaskCreate( prvMQTTAgentTask, "MQTTAgent", democonfigDEMO_STACKSIZE, NULL, tskIDLE_PRIORITY + 1, &xAgentTask );
-    configASSERT( xResult == pdPASS );
 
     for( ; ; )
     {

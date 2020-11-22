@@ -222,6 +222,19 @@ static void prvHandleSubscriptionAcks( MQTTAgentContext_t * pAgentContext,
  */
 static MQTTAgentContext_t * getAgentFromContext( MQTTContext_t * pMQTTContext );
 
+
+/**
+ * @brief Task used to run the MQTT agent.
+ *
+ * This task calls MQTTAgent_CommandLoop() in a loop, until MQTTAgent_Terminate()
+ * is called. If an error occcurs in the command loop, then it will reconnect the
+ * TCP and MQTT connections.
+ *
+ * @param[in] pvParameters Parameters as passed at the time of task creation. Not
+ * used in this example.
+ */
+static void prvMQTTAgentTask( void * pvParameters );
+
 /*-----------------------------------------------------------*/
 
 /**
@@ -817,10 +830,15 @@ MQTTContext_t * MQTTAgent_CommandLoop( void )
     for( ; ; )
     {
         /* If there is no command in the queue, try again. */
-        if( xQueueReceive( xCommandQueue, &xCommand, mqttexampleDEMO_TICKS_TO_WAIT ) == pdFALSE )
+        memset( ( void * ) &xCommand, 0x00, sizeof( xCommand ) );/*_RB_ Required to set the command type to NONE and the callback to NULL. */
+        if( xQueueReceive( xCommandQueue, &xCommand, mqttexampleDEMO_TICKS_TO_WAIT ) != pdFALSE )
         {
-            LogInfo( ( "No commands in the queue. Trying again." ) );
-            continue;
+            /*__RB__ Removed continue as we want to keep calling prvProcessCommand() to
+            ensure the protocol ticks over - but not sure how to do that without the
+            MQTT context. */
+
+            /* Keep a count of processed operations, for debug logs. */
+            lNumProcessed++;
         }
 
         xStatus = prvProcessCommand( &xCommand );
@@ -832,20 +850,6 @@ MQTTContext_t * MQTTAgent_CommandLoop( void )
                         MQTT_Status_strerror( xStatus ) ) );
             ret = xCommand.pMqttContext;
             break;
-        }
-
-        /* Keep a count of processed operations, for debug logs. */
-        lNumProcessed++;
-
-        /* Delay after sending a subscribe. This is to so that the broker
-         * creates a subscription for us before processing our next publish,
-         * which should be immediately after this.  Only required because the
-         * subscribe and publish commands are coming from separate tasks, which
-         * would not normally be the case. */
-        if( xCommand.xCommandType == SUBSCRIBE )
-        {
-            LogDebug( ( "Sleeping for %d ms after sending SUBSCRIBE packet.", mqttexamplePOST_SUBSCRIBE_DELAY_MS ) );
-            vTaskDelay( mqttexamplePOST_SUBSCRIBE_DELAY_MS );
         }
 
         /* Terminate the loop if we receive the termination command. */
@@ -1078,6 +1082,93 @@ bool MQTTAgent_Free( MQTTContext_t * pMqttContext,
 {
     configASSERT( pMqttContext != NULL );
     return createAndAddCommand( FREE, pMqttContext, pContext, cmdCallback );
+}
+
+
+/*-----------------------------------------------------------*/
+
+static void prvMQTTAgentTask( void * pvParameters )
+{
+    BaseType_t xNetworkResult = pdFAIL;
+    MQTTStatus_t xMQTTStatus = MQTTSuccess;
+    MQTTContext_t * pMqttContext = NULL;
+
+    ( void ) pvParameters;
+
+    do
+    {
+        pMqttContext = MQTTAgent_CommandLoop();
+#ifdef _RB_
+        /* Context is only returned if error occurred. */
+        if( pMqttContext != NULL )
+        {
+            /* Reconnect TCP. */
+            xNetworkResult = prvSocketDisconnect( &xNetworkContext );
+            configASSERT( xNetworkResult == pdPASS );
+            xNetworkResult = prvSocketConnect( &xNetworkContext );
+            configASSERT( xNetworkResult == pdPASS );
+            /* MQTT Connect with a persistent session. */
+            xMQTTStatus = prvMQTTConnect( pMqttContext, false );
+        }
+#endif
+    } while( pMqttContext );
+
+    vTaskDelete( NULL );
+}
+
+TaskHandle_t MQTTAgent_CreateAgent( const configSTACK_DEPTH_TYPE uxStackDepth, const UBaseType_t uxPriority, const UBaseType_t uxCommandQueueLength )
+{
+    static BaseType_t xAgentCreated = pdFALSE;
+    BaseType_t xCreateAgent;
+    BaseType_t xResult;
+    TaskHandle_t xAgentTask = NULL;
+
+    taskENTER_CRITICAL();
+    {
+        if( xAgentCreated == pdFALSE )
+        {
+            /* The agent has not been created yet, so try and create it. */
+            xCreateAgent = pdTRUE;
+            xAgentCreated = pdTRUE;
+        }
+        else
+        {
+            xCreateAgent = pdFALSE;
+        }
+    }
+    taskEXIT_CRITICAL();
+
+    if( xCreateAgent != pdFALSE )
+    {
+        /* The command queue should not have been created yet. */
+        configASSERT( xCommandQueue == NULL );
+        xCommandQueue = xQueueCreate( uxCommandQueueLength, sizeof( Command_t ) );
+
+        if( xCommandQueue != NULL )
+        {
+            /* Create the MQTT agent task. */
+            xResult = xTaskCreate( prvMQTTAgentTask, "MQTTAgent", uxStackDepth, NULL, uxPriority, &xAgentTask );
+
+            if( xResult == pdFALSE )
+            {
+                /* Free the queue again. */
+                vQueueDelete( xCommandQueue );
+                xCommandQueue = NULL;
+                xAgentCreated = pdFALSE;
+            }
+        }
+
+        if( xCommandQueue == NULL )
+        {
+            LogDebug( ( "Could not create MQTT agent - possibly not enough heap memory." ) );
+        }
+        else
+        {
+            LogInfo( ( "Successfully created MQTT agent task." ) );
+        }
+    }
+
+    return xAgentTask;
 }
 
 /*-----------------------------------------------------------*/

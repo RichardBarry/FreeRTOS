@@ -179,7 +179,7 @@
 /**
  * @brief Delay for the synchronous publisher task between publishes.
  */
-#define mqttexamplePUBLISH_DELAY_SYNC_MS             100U
+#define mqttexamplePUBLISH_DELAY_SYNC_MS             0U
 
 /**
  * @brief Delay for the asynchronous publisher task between publishes.
@@ -342,6 +342,8 @@ void prvSyncPublishTask( void * pvParameters );
  */
 void prvAsyncPublishTask( void * pvParameters );
 
+static void prvSimpleSubscribePublishTask( void * pvParameters );
+
 /**
  * @brief The task used to wait for incoming publishes.
  *
@@ -375,14 +377,6 @@ static void prvMQTTDemoTask( void * pvParameters );
  * @return Time in milliseconds.
  */
 static uint32_t prvGetTimeMs( void );
-
-/**
- * @brief Cleans any persistent sessions that may already exist
- * This demo uses a persistent session that can be re-connected if disconnected.
- * Clean any lingering sessions that may exist from previous executions of the
- * demo.
- */
-static void prvCleanExistingPersistentSession( void );
 
 /*-----------------------------------------------------------*/
 
@@ -451,6 +445,17 @@ static uint32_t ulGlobalEntryTimeMs;
  */
 void vStartSimpleMQTTDemo( void )
 {
+    ulGlobalEntryTimeMs = prvGetTimeMs();
+
+    /* Create response queues for each task. */
+    xSubscriberResponseQueue = xQueueCreate( mqttexamplePUBLISH_QUEUE_SIZE, sizeof( PublishElement_t ) );
+
+    /* In this demo, send publishes on non-subscribed topics to this queue.
+     * Note that this value is not meant to be changed after `MQTTAgent_CommandLoop` has
+     * been called, since access to this variable is not protected by thread
+     * synchronization primitives. */
+    xDefaultResponseQueue = xQueueCreate( 1, sizeof( PublishElement_t ) );
+
     /* This example uses one application task to process the command queue for
      * MQTT operations, and creates additional tasks to add operations to that
      * queue. */
@@ -1026,126 +1031,156 @@ void prvSubscribeTask( void * pvParameters )
 
 /*-----------------------------------------------------------*/
 
-static void prvCleanExistingPersistentSession( void )
+static void prvSimpleSubscribePublishTask( void * pvParameters )
 {
-    BaseType_t xNetworkStatus = pdFAIL;
-    MQTTStatus_t xMQTTStatus;
+    Command_t xCommand;
+    MQTTPublishInfo_t xPublishInfo = { 0 };
+    PublishElement_t xIncomingPublish;
+    char payloadBuf[ mqttexampleDEMO_BUFFER_SIZE ];
+    char topicBuf[ mqttexampleDEMO_BUFFER_SIZE ];
+    char taskName[ mqttexampleDEMO_BUFFER_SIZE ];
+    CommandContext_t xCommandContext;
+    MQTTSubscribeInfo_t xSubscribeInfo;
+    uint32_t ulNotification = 0U, ulValueToNotify = 0UL;
+    BaseType_t xCommandAdded = pdTRUE;
+    const TickType_t xMQTTInitWait = ( TickType_t ) 200;
 
-    /* Connect to the broker. We connect here with the "clean session" flag set
-     * to true in order to clear any prior state in the broker. We will disconnect
-     * and later form a persistent session, so that it may be resumed if the
-     * network suddenly disconnects. */
-    xNetworkStatus = prvSocketConnect( &xNetworkContext );
-    configASSERT( xNetworkStatus == pdPASS );
-    LogInfo( ( "Creating a clean session to clear any broker state information." ) );
-    xMQTTStatus = prvMQTTInit( &globalMqttContext, &xNetworkContext );
-    configASSERT( xMQTTStatus == MQTTSuccess );
-    xMQTTStatus = prvMQTTConnect( &globalMqttContext, true );
-    configASSERT( xMQTTStatus == MQTTSuccess );
+    /* Wait for the MQTT agent to be ready. */
+    while( globalMqttContext.connectStatus != MQTTConnected )
+    {
+        vTaskDelay( xMQTTInitWait );
+    }
 
-    /* Disconnect. */
-    xMQTTStatus = MQTT_Disconnect( &globalMqttContext );
-    configASSERT( xMQTTStatus == MQTTSuccess );
-    xNetworkStatus = prvSocketDisconnect( &xNetworkContext );
-    configASSERT( xNetworkStatus == pdPASS );
+    /* Create a unique name for this task from the task number that is passed into
+    the task using the task's parameter. */
+    snprintf( taskName, mqttexampleDEMO_BUFFER_SIZE, "Publisher%d", ( int ) pvParameters );
+
+    /* Create a topic name for this task to publish too. */
+    snprintf( topicBuf, mqttexampleDEMO_BUFFER_SIZE, "/filter/%s", taskName );
+
+    /* Subscribe to the same topic to which this task will publish.  That will
+    result in each published message being published from the server back to us. */
+    xSubscribeInfo.qos = MQTTQoS1;
+    xSubscribeInfo.pTopicFilter = topicBuf;
+    xSubscribeInfo.topicFilterLength = ( uint16_t ) strlen( xSubscribeInfo.pTopicFilter );
+
+    LogInfo( ( "Topic filter: %.*s", xSubscribeInfo.topicFilterLength, xSubscribeInfo.pTopicFilter ) );
+    memset( ( void * ) &xCommandContext, 0x00, sizeof( xCommandContext ) );
+    xCommandContext.pxResponseQueue = xSubscriberResponseQueue; /*_RB_ This must be set otherwise the subscribe is reported as successful but its not placed in the subscription list. */
+    xCommandContext.xTaskToNotify = xTaskGetCurrentTaskHandle();
+    xCommandContext.ulNotificationBit = mqttexampleSUBSCRIBE_COMPLETE_BIT;
+    xCommandContext.pxSubscribeInfo = &xSubscribeInfo;
+    xCommandContext.ulSubscriptionCount = 1;
+    LogInfo( ( "Adding subscribe operation" ) );
+    xCommandAdded = MQTTAgent_Subscribe( &globalMqttContext, &xSubscribeInfo, 1, &xCommandContext, prvCommandCallback );
+    configASSERT( xCommandAdded == true );
+
+    /* Wait for subscribe to complete. */
+    if( xTaskNotifyWait( 0, UINT_MAX, &ulNotification, mqttexampleDEMO_TICKS_TO_WAIT ) == pdFAIL )
+    {
+        LogError( ( "Subscription to %s failed.", topicBuf ) );
+    }
+
+
+    /* We use QoS 1 so that the operation won't be counted as complete until we
+     * receive the publish acknowledgment. */
+    xPublishInfo.qos = MQTTQoS1;
+    xPublishInfo.pTopicName = topicBuf;
+    xPublishInfo.pPayload = payloadBuf;
+    xPublishInfo.topicNameLength = ( uint16_t ) strlen( topicBuf );
+    xCommandContext.pxPublishInfo = &xPublishInfo;
+
+    /* Synchronous publishes. In case mqttexamplePUBLISH_COUNT is odd, round up. */
+    for( ;; )
+    {
+        snprintf( payloadBuf, mqttexampleDEMO_BUFFER_SIZE, "%s publishing message %d", taskName, ( int ) ulValueToNotify );
+        xPublishInfo.payloadLength = ( uint16_t ) strlen( payloadBuf );
+
+        memset( ( void * ) &xCommand, 0x00, sizeof( xCommand ) );
+        xCommandContext.ulNotificationBit = ulValueToNotify;
+        LogInfo( ( "Adding publish operation for message \"%s\" on topic \"%s\"", payloadBuf, xPublishInfo.pTopicName ) );
+        xCommandAdded = MQTTAgent_Publish( &globalMqttContext, &xPublishInfo, &xCommandContext, prvCommandCallback );
+        configASSERT( xCommandAdded == pdTRUE );
+        LogInfo( ( "Task %s waiting for publish %d to complete.", taskName, ulValueToNotify ) );
+
+        if( xTaskNotifyWait( 0, UINT_MAX, &ulNotification, mqttexampleDEMO_TICKS_TO_WAIT ) == pdFAIL )
+        {
+            LogError( ( "Synchronous publish loop iteration %d"
+                        " exceeded maximum wait time.\n", ulValueToNotify ) );
+        }
+        configASSERT( ulNotification == ulValueToNotify );
+
+        while( xQueueReceive( xSubscriberResponseQueue, &xIncomingPublish, 0 ) != pdFALSE )
+        {
+            char cTerminatedTopicName[ 50 ];
+            memset( ( void * ) cTerminatedTopicName, 0x00, sizeof( cTerminatedTopicName ) );
+            if( xIncomingPublish.xPublishInfo.topicNameLength < sizeof( cTerminatedTopicName ) )
+            {
+                memcpy( ( void * ) cTerminatedTopicName, xIncomingPublish.pcTopicNameBuf, xIncomingPublish.xPublishInfo.topicNameLength );
+            }
+
+            LogInfo( ( "Received \"%s\" from topic \"%s\"", xIncomingPublish.pcPayloadBuf, cTerminatedTopicName ) );
+        }
+
+        LogInfo( ( "Publish operation complete. Sleeping for %d ms.\n", mqttexamplePUBLISH_DELAY_SYNC_MS ) );
+        vTaskDelay( pdMS_TO_TICKS( mqttexamplePUBLISH_DELAY_SYNC_MS ) );
+
+        ulValueToNotify++;
+    }
 }
-
-/*-----------------------------------------------------------*/
 
 static void prvMQTTDemoTask( void * pvParameters )
 {
     BaseType_t xNetworkStatus = pdFAIL;
     MQTTStatus_t xMQTTStatus;
-    BaseType_t xResult = pdFALSE;
     /* This context is used in the call to MQTTAgent_Register(). */
     CommandContext_t initializeContext;
-    uint32_t ulNotification = 0;
     TaskHandle_t xAgentTask;
 
-    uint32_t ulExpectedNotifications = mqttexamplePUBLISHER_SYNC_COMPLETE_BIT |
-                                       mqttexampleSUBSCRIBE_TASK_COMPLETE_BIT |
-                                       mqttexamplePUBLISHER_ASYNC_COMPLETE_BIT;
-
     ( void ) pvParameters;
-
-    ulGlobalEntryTimeMs = prvGetTimeMs();
-
-    /* Create response queues for each task. */
-    xSubscriberResponseQueue = xQueueCreate( mqttexamplePUBLISH_QUEUE_SIZE, sizeof( PublishElement_t ) );
-
-    /* In this demo, send publishes on non-subscribed topics to this queue.
-     * Note that this value is not meant to be changed after `MQTTAgent_CommandLoop` has
-     * been called, since access to this variable is not protected by thread
-     * synchronization primitives. */
-    xDefaultResponseQueue = xQueueCreate( 1, sizeof( PublishElement_t ) );
 
 
     xAgentTask = MQTTAgent_CreateAgent( configMINIMAL_STACK_SIZE, configMAX_PRIORITIES - 2, mqttagentCOMMAND_QUEUE_LENGTH );
     configASSERT( xAgentTask );
 
+    /* Register the MQTT context with the agent. */
+    initializeContext.xTaskToNotify = NULL;
+    MQTTAgent_Register( &globalMqttContext, &xDefaultResponseQueue, &initializeContext, prvCommandCallback );
 
-    /* This demo uses a persistent session that can be re-connected if disconnected.
-     * Clean any lingering sessions that may exist from previous executions of the
-     * demo. */
-    prvCleanExistingPersistentSession();
+    /* Connect to the broker. */
+    xNetworkStatus = prvSocketConnect( &xNetworkContext );
+    configASSERT( xNetworkStatus == pdPASS );
 
-    for( ; ; )
-    {
-        /* Register the MQTT context with the agent. */
-        initializeContext.xTaskToNotify = NULL;
-        MQTTAgent_Register( &globalMqttContext, &xDefaultResponseQueue, &initializeContext, prvCommandCallback );
-        /* Connect to the broker. */
-        xNetworkStatus = prvSocketConnect( &xNetworkContext );
-        configASSERT( xNetworkStatus == pdPASS );
-        /* Form an MQTT connection with a persistent session. */
-        xMQTTStatus = prvMQTTConnect( &globalMqttContext, false );
-        configASSERT( xMQTTStatus == MQTTSuccess );
-        configASSERT( globalMqttContext.connectStatus == MQTTConnected );
+    /* Initialise the MQTT context with the buffer and transport interface. */
+    xMQTTStatus = prvMQTTInit( &globalMqttContext, &xNetworkContext );
+    configASSERT( xMQTTStatus == MQTTSuccess );
 
-        /* Give subscriber task higher priority so the subscribe will be processed
-         * before the first publish.  This must be less than or equal to the priority of
-         * the main task. */
-        xResult = xTaskCreate( prvSubscribeTask, "Subscriber", democonfigDEMO_STACKSIZE, NULL, tskIDLE_PRIORITY + 1, &xSubscribeTask );
-        configASSERT( xResult == pdPASS );
-        xResult = xTaskCreate( prvSyncPublishTask, "SyncPublisher", democonfigDEMO_STACKSIZE, NULL, tskIDLE_PRIORITY, &xSyncPublisherTask );
-        configASSERT( xResult == pdPASS );
-        xResult = xTaskCreate( prvAsyncPublishTask, "AsyncPublisher", democonfigDEMO_STACKSIZE, NULL, tskIDLE_PRIORITY, &xAsyncPublisherTask );
-        configASSERT( xResult == pdPASS );
 
-        LogInfo( ( "Running command loop" ) );
+    /* Form an MQTT connection without a persistent session. */
+    xMQTTStatus = prvMQTTConnect( &globalMqttContext, true );
+    configASSERT( xMQTTStatus == MQTTSuccess );
+    configASSERT( globalMqttContext.connectStatus == MQTTConnected );
 
-        while( globalMqttContext.connectStatus == MQTTConnected )
-        {
-            vTaskDelay( 1000 );
-        }
+    /* Create a few instances of prvSimpleSubscribePublishTask(). */
+    xTaskCreate( prvSimpleSubscribePublishTask, "SubPub0", democonfigDEMO_STACKSIZE, ( void * ) 0, tskIDLE_PRIORITY + 1, NULL );
+    xTaskCreate( prvSimpleSubscribePublishTask, "SubPub1", democonfigDEMO_STACKSIZE, ( void * ) 1, tskIDLE_PRIORITY, NULL );
+    xTaskCreate( prvSimpleSubscribePublishTask, "SubPub2", democonfigDEMO_STACKSIZE, ( void * ) 2, tskIDLE_PRIORITY, NULL );
 
-        /* Delete created queues. Wait for tasks to exit before cleaning up. */
-        LogInfo( ( "Waiting for tasks to exit." ) );
-        ( void ) prvNotificationWaitLoop( &ulNotification, ulExpectedNotifications, false );
+    /* Finally turn this task into an instance of prvSimpleSubscribePublishTask()
+    * too. */
+    prvSimpleSubscribePublishTask( ( void * ) 3 );
 
-        configASSERT( ( ulNotification & ulExpectedNotifications ) == ulExpectedNotifications );
-
-        /* Remove the association with the MQTT context. This will clear any
-         * list of pending acknowledgments or subscriptions in case any error
-         * occurred. */
-        MQTTAgent_Free( &globalMqttContext, NULL, NULL );
-
-        /* Reset queues, except for the command queue. */
-        xQueueReset( xDefaultResponseQueue );
-        xQueueReset( xSubscriberResponseQueue );
-
-        /* Clear task notifications. */
-        ulNotification = ulTaskNotifyValueClear( NULL, ~( 0U ) );
-
-        /* Disconnect. */
-        xNetworkStatus = prvSocketDisconnect( &xNetworkContext );
-        configASSERT( xNetworkStatus == pdPASS );
-
-        LogInfo( ( "\r\n\r\nprvMQTTDemoTask() completed an iteration successfully. Total free heap is %u.\r\n", xPortGetFreeHeapSize() ) );
-        LogInfo( ( "Demo completed successfully.\r\n" ) );
-        LogInfo( ( "Short delay before starting the next iteration.... \r\n\r\n" ) );
-        vTaskDelay( mqttexampleDELAY_BETWEEN_DEMO_ITERATIONS );
-    }
+#ifdef _RB_
+    /* Give subscriber task higher priority so the subscribe will be processed
+        * before the first publish.  This must be less than or equal to the priority of
+        * the main task. */
+    xResult = xTaskCreate( prvSubscribeTask, "Subscriber", democonfigDEMO_STACKSIZE, NULL, tskIDLE_PRIORITY + 1, &xSubscribeTask );
+    configASSERT( xResult == pdPASS );
+    xResult = xTaskCreate( prvSyncPublishTask, "SyncPublisher", democonfigDEMO_STACKSIZE, NULL, tskIDLE_PRIORITY, &xSyncPublisherTask );
+    configASSERT( xResult == pdPASS );
+    xResult = xTaskCreate( prvAsyncPublishTask, "AsyncPublisher", democonfigDEMO_STACKSIZE, NULL, tskIDLE_PRIORITY, &xAsyncPublisherTask );
+    configASSERT( xResult == pdPASS );
+#endif
 }
 
 /*-----------------------------------------------------------*/

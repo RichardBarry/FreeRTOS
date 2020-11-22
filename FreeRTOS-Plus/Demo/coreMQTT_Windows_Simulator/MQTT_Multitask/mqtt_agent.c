@@ -649,7 +649,7 @@ static void prvHandleIncomingPublish( MQTTAgentContext_t * pAgentContext,
         LogWarn( ( "Publish received on topic %.*s with no subscription.\n",
                    pxPublishInfo->topicNameLength,
                    pxPublishInfo->pTopicName ) );
-        xPublishCopied = prvCopyPublishToQueue( pxPublishInfo, pAgentContext->pDefaultResponseQueue );
+        xPublishCopied = prvCopyPublishToQueue( pxPublishInfo, pAgentContext->pDefaultResponseQueue ); /*_RB_ pDefaultResponseQueue never seems to get set. */
         /* Ensure the publish was copied to the queue. */
         configASSERT( xPublishCopied == pdTRUE );
     }
@@ -980,13 +980,13 @@ MQTTStatus_t MQTTAgent_ResumeSession( MQTTContext_t * pMqttContext,
 
 static bool createAndAddCommand( CommandType_t commandType,
                                  MQTTContext_t * pMqttContext,
-                                 CommandContext_t * pContext,
+                                 CommandContext_t * pCommandContext,
                                  CommandCallback_t cmdCallback )
 {
     bool ret = false;
     Command_t newCommand = { 0 };
 
-    ret = prvCreateCommand( commandType, pContext, cmdCallback, &newCommand, pMqttContext );
+    ret = prvCreateCommand( commandType, pCommandContext, cmdCallback, &newCommand, pMqttContext );
 
     if( ret )
     {
@@ -999,65 +999,65 @@ static bool createAndAddCommand( CommandType_t commandType,
 bool MQTTAgent_Subscribe( MQTTContext_t * pMqttContext,
                           MQTTSubscribeInfo_t * pSubscriptionList,
                           size_t subscriptionCount,
-                          CommandContext_t * pContext,
+                          CommandContext_t * pCommandContext,
                           CommandCallback_t cmdCallback )
 {
     configASSERT( pMqttContext != NULL );
-    configASSERT( pContext != NULL );
-    pContext->ulSubscriptionCount = subscriptionCount;
-    pContext->pxSubscribeInfo = pSubscriptionList;
-    return createAndAddCommand( SUBSCRIBE, pMqttContext, pContext, cmdCallback );
+    configASSERT( pCommandContext != NULL );
+    pCommandContext->ulSubscriptionCount = subscriptionCount;
+    pCommandContext->pxSubscribeInfo = pSubscriptionList;
+    return createAndAddCommand( SUBSCRIBE, pMqttContext, pCommandContext, cmdCallback );
 }
 
 bool MQTTAgent_Unsubscribe( MQTTContext_t * pMqttContext,
                             MQTTSubscribeInfo_t * pSubscriptionList,
                             size_t subscriptionCount,
-                            CommandContext_t * pContext,
+                            CommandContext_t * pCommandContext,
                             CommandCallback_t cmdCallback )
 {
     configASSERT( pMqttContext != NULL );
-    configASSERT( pContext != NULL );
-    pContext->ulSubscriptionCount = subscriptionCount;
-    pContext->pxSubscribeInfo = pSubscriptionList;
-    return createAndAddCommand( UNSUBSCRIBE, pMqttContext, pContext, cmdCallback );
+    configASSERT( pCommandContext != NULL );
+    pCommandContext->ulSubscriptionCount = subscriptionCount;
+    pCommandContext->pxSubscribeInfo = pSubscriptionList;
+    return createAndAddCommand( UNSUBSCRIBE, pMqttContext, pCommandContext, cmdCallback );
 }
 
 bool MQTTAgent_Publish( MQTTContext_t * pMqttContext,
                         MQTTPublishInfo_t * pPublishInfo,
-                        CommandContext_t * pContext,
+                        CommandContext_t * pCommandContext,
                         CommandCallback_t cmdCallback )
 {
     configASSERT( pMqttContext != NULL );
-    configASSERT( pContext != NULL );
-    pContext->pxPublishInfo = pPublishInfo;
-    return createAndAddCommand( PUBLISH, pMqttContext, pContext, cmdCallback );
+    configASSERT( pCommandContext != NULL );
+    pCommandContext->pxPublishInfo = pPublishInfo;
+    return createAndAddCommand( PUBLISH, pMqttContext, pCommandContext, cmdCallback );
 }
 
 bool MQTTAgent_ProcessLoop( MQTTContext_t * pMqttContext,
                             uint32_t timeoutMs,
-                            CommandContext_t * pContext,
+                            CommandContext_t * pCommandContext,
                             CommandCallback_t cmdCallback )
 {
     configASSERT( pMqttContext != NULL );
     /* Not implemented yet. */
     ( void ) timeoutMs;
-    return createAndAddCommand( PROCESSLOOP, pMqttContext, pContext, cmdCallback );
+    return createAndAddCommand( PROCESSLOOP, pMqttContext, pCommandContext, cmdCallback );
 }
 
 bool MQTTAgent_Ping( MQTTContext_t * pMqttContext,
-                     CommandContext_t * pContext,
+                     CommandContext_t * pCommandContext,
                      CommandCallback_t cmdCallback )
 {
     configASSERT( pMqttContext != NULL );
-    return createAndAddCommand( PING, pMqttContext, pContext, cmdCallback );
+    return createAndAddCommand( PING, pMqttContext, pCommandContext, cmdCallback );
 }
 
 bool MQTTAgent_Disconnect( MQTTContext_t * pMqttContext,
-                           CommandContext_t * pContext,
+                           CommandContext_t * pCommandContext,
                            CommandCallback_t cmdCallback )
 {
     configASSERT( pMqttContext != NULL );
-    return createAndAddCommand( DISCONNECT, pMqttContext, pContext, cmdCallback );
+    return createAndAddCommand( DISCONNECT, pMqttContext, pCommandContext, cmdCallback );
 }
 
 bool MQTTAgent_Terminate( void )
@@ -1067,21 +1067,21 @@ bool MQTTAgent_Terminate( void )
 
 bool MQTTAgent_Register( MQTTContext_t * pMqttContext,
                          void * pDefaultResponseQueue,
-                         CommandContext_t * pContext,
+                         CommandContext_t * pCommandContext,
                          CommandCallback_t cmdCallback )
 {
     configASSERT( pMqttContext != NULL );
-    configASSERT( pContext != NULL );
-    pContext->pxResponseQueue = pDefaultResponseQueue;
-    return createAndAddCommand( INITIALIZE, pMqttContext, pContext, cmdCallback );
+    configASSERT( pCommandContext != NULL );
+    pCommandContext->pxResponseQueue = pDefaultResponseQueue;
+    return createAndAddCommand( INITIALIZE, pMqttContext, pCommandContext, cmdCallback );
 }
 
 bool MQTTAgent_Free( MQTTContext_t * pMqttContext,
-                     CommandContext_t * pContext,
+                     CommandContext_t * pCommandContext,
                      CommandCallback_t cmdCallback )
 {
     configASSERT( pMqttContext != NULL );
-    return createAndAddCommand( FREE, pMqttContext, pContext, cmdCallback );
+    return createAndAddCommand( FREE, pMqttContext, pCommandContext, cmdCallback );
 }
 
 
@@ -1089,7 +1089,7 @@ bool MQTTAgent_Free( MQTTContext_t * pMqttContext,
 
 static void prvMQTTAgentTask( void * pvParameters )
 {
-    BaseType_t xNetworkResult = pdFAIL;
+//_RB_    BaseType_t xNetworkResult = pdFAIL;
     MQTTStatus_t xMQTTStatus = MQTTSuccess;
     MQTTContext_t * pMqttContext = NULL;
 

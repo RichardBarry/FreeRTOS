@@ -527,16 +527,38 @@ static void prvCommandCallback( CommandContext_t * pxContext )
 
 /*-----------------------------------------------------------*/
 
+static BaseType_t prvSubscribeToTopic( MQTTQoS_t xQoS, char *pcTopicFilter )
+{
+    BaseType_t xCommandAdded;
+    static MQTTSubscribeInfo_t xSubscribeInfo;
+    static CommandContext_t xCommandContext;
+
+    xSubscribeInfo.pTopicFilter = pcTopicFilter;
+    xSubscribeInfo.topicFilterLength = ( uint16_t ) strlen( pcTopicFilter );
+    xSubscribeInfo.qos = xQoS;
+
+    LogInfo( ( "Subscribing to topic filter: %s", pcTopicFilter ) );
+    memset( ( void * ) &xCommandContext, 0x00, sizeof( xCommandContext ) );
+    xCommandContext.pxResponseQueue = xSubscriberResponseQueue; /*_RB_ This must be set otherwise the subscribe is reported as successful but its not placed in the subscription list. */
+    xCommandContext.xTaskToNotify = xTaskGetCurrentTaskHandle();
+    xCommandContext.pxSubscribeInfo = &xSubscribeInfo;
+    xCommandContext.ulSubscriptionCount = 1;
+    LogInfo( ( "Adding subscribe operation" ) );
+    xCommandAdded = MQTTAgent_Subscribe( &globalMqttContext, &xSubscribeInfo, 1, &xCommandContext, prvCommandCallback );
+    configASSERT( xCommandAdded == true );
+
+    return xCommandAdded;
+}
+/*-----------------------------------------------------------*/
+
 static void prvSimpleSubscribePublishTask( void * pvParameters )
 {
-    Command_t xCommand;
     MQTTPublishInfo_t xPublishInfo = { 0 };
     PublishElement_t xIncomingPublish;
     char payloadBuf[ mqttexampleDEMO_BUFFER_SIZE ];
     char topicBuf[ mqttexampleDEMO_BUFFER_SIZE ];
     char taskName[ mqttexampleDEMO_BUFFER_SIZE ];
     CommandContext_t xCommandContext;
-    MQTTSubscribeInfo_t xSubscribeInfo;
     uint32_t ulNotification = 0U, ulValueToNotify = 0UL;
     BaseType_t xCommandAdded = pdTRUE;
     const TickType_t xMQTTInitWait = ( TickType_t ) 200;
@@ -551,39 +573,24 @@ static void prvSimpleSubscribePublishTask( void * pvParameters )
     the task using the task's parameter. */
     snprintf( taskName, mqttexampleDEMO_BUFFER_SIZE, "Publisher%d", ( int ) pvParameters );
 
-    /* Create a topic name for this task to publish too. */
+    /* Create a topic name for this task to publish to. */
     snprintf( topicBuf, mqttexampleDEMO_BUFFER_SIZE, "/filter/%s", taskName );
 
     /* Subscribe to the same topic to which this task will publish.  That will
     result in each published message being published from the server back to us. */
-    xSubscribeInfo.qos = MQTTQoS1;
-    xSubscribeInfo.pTopicFilter = topicBuf;
-    xSubscribeInfo.topicFilterLength = ( uint16_t ) strlen( xSubscribeInfo.pTopicFilter );
-
-    LogInfo( ( "Topic filter: %.*s", xSubscribeInfo.topicFilterLength, xSubscribeInfo.pTopicFilter ) );
-    memset( ( void * ) &xCommandContext, 0x00, sizeof( xCommandContext ) );
-    xCommandContext.pxResponseQueue = xSubscriberResponseQueue; /*_RB_ This must be set otherwise the subscribe is reported as successful but its not placed in the subscription list. */
-    xCommandContext.xTaskToNotify = xTaskGetCurrentTaskHandle();
-    xCommandContext.pxSubscribeInfo = &xSubscribeInfo;
-    xCommandContext.ulSubscriptionCount = 1;
-    LogInfo( ( "Adding subscribe operation" ) );
-    xCommandAdded = MQTTAgent_Subscribe( &globalMqttContext, &xSubscribeInfo, 1, &xCommandContext, prvCommandCallback );
-    configASSERT( xCommandAdded == true );
-
-    /* Wait for subscribe to complete. */
-    if( xTaskNotifyWait( 0, UINT_MAX, &ulNotification, mqttexampleDEMO_TICKS_TO_WAIT ) == pdFAIL )
-    {
-        LogError( ( "Subscription to %s failed.", topicBuf ) );
-    }
-
+    prvSubscribeToTopic( MQTTQoS1, topicBuf );
 
     /* We use QoS 1 so that the operation won't be counted as complete until we
      * receive the publish acknowledgment. */
+    memset( ( void * ) &xPublishInfo, 0x00, sizeof( xPublishInfo ) );
     xPublishInfo.qos = MQTTQoS1;
     xPublishInfo.pTopicName = topicBuf;
-    xPublishInfo.pPayload = payloadBuf;
     xPublishInfo.topicNameLength = ( uint16_t ) strlen( topicBuf );
+    xPublishInfo.pPayload = payloadBuf;
+
+    memset( ( void * ) &xCommandContext, 0x00, sizeof( xCommandContext ) );
     xCommandContext.pxPublishInfo = &xPublishInfo;
+    xCommandContext.xTaskToNotify = xTaskGetCurrentTaskHandle();
 
     /* Synchronous publishes. In case mqttexamplePUBLISH_COUNT is odd, round up. */
     for( ;; )
@@ -591,7 +598,6 @@ static void prvSimpleSubscribePublishTask( void * pvParameters )
         snprintf( payloadBuf, mqttexampleDEMO_BUFFER_SIZE, "%s publishing message %d", taskName, ( int ) ulValueToNotify );
         xPublishInfo.payloadLength = ( uint16_t ) strlen( payloadBuf );
 
-        memset( ( void * ) &xCommand, 0x00, sizeof( xCommand ) );
         xCommandContext.ulNotificationValue = ulValueToNotify;
         LogInfo( ( "Adding publish operation for message \"%s\" on topic \"%s\"", payloadBuf, xPublishInfo.pTopicName ) );
         xCommandAdded = MQTTAgent_Publish( &globalMqttContext, &xPublishInfo, &xCommandContext, prvCommandCallback );
@@ -657,12 +663,12 @@ static void prvMQTTDemoTask( void * pvParameters )
     configASSERT( globalMqttContext.connectStatus == MQTTConnected );
 
     /* Create a few instances of prvSimpleSubscribePublishTask(). */
-    xTaskCreate( prvSimpleSubscribePublishTask, "SubPub0", democonfigDEMO_STACKSIZE, ( void * ) 0, tskIDLE_PRIORITY + 1, NULL );
-    xTaskCreate( prvSimpleSubscribePublishTask, "SubPub1", democonfigDEMO_STACKSIZE, ( void * ) 1, tskIDLE_PRIORITY, NULL );
-    xTaskCreate( prvSimpleSubscribePublishTask, "SubPub2", democonfigDEMO_STACKSIZE, ( void * ) 2, tskIDLE_PRIORITY, NULL );
+//    xTaskCreate( prvSimpleSubscribePublishTask, "SubPub0", democonfigDEMO_STACKSIZE, ( void * ) 0, tskIDLE_PRIORITY + 1, NULL );
+//    xTaskCreate( prvSimpleSubscribePublishTask, "SubPub1", democonfigDEMO_STACKSIZE, ( void * ) 1, tskIDLE_PRIORITY, NULL );
+//    xTaskCreate( prvSimpleSubscribePublishTask, "SubPub2", democonfigDEMO_STACKSIZE, ( void * ) 2, tskIDLE_PRIORITY, NULL );
 
     /* Finally turn this task into an instance of prvSimpleSubscribePublishTask()
-    * too. */
+     * too. */
     prvSimpleSubscribePublishTask( ( void * ) 3 );
 }
 

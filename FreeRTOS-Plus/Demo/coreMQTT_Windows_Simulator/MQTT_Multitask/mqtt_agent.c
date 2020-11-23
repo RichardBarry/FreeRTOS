@@ -64,7 +64,7 @@ typedef struct subscriptionElement
 {
     char pcSubscriptionFilter[ mqttexampleDEMO_BUFFER_SIZE ];
     uint16_t usFilterLength;
-    QueueHandle_t pxResponseQueue;
+    IncomingPublishCallback_t vIncomingPublishCallback;
 } SubscriptionElement_t;
 
 /**
@@ -118,12 +118,12 @@ static AckInfo_t prvGetAwaitingOperation( MQTTAgentContext_t * pAgentContext,
  *
  * @param[in] pcTopicFilter Topic filter of subscription.
  * @param[in] usTopicFilterLength Length of topic filter.
- * @param[in] pxQueue Response queue in which to enqueue received publishes.
+ * @param[in] IncomingPublishCallback_t Callback to execute when receiving publishes.
  */
 static void prvAddSubscription( MQTTAgentContext_t * pAgentContext,
                                 const char * pcTopicFilter,
                                 uint16_t usTopicFilterLength,
-                                QueueHandle_t pxQueue );
+                                IncomingPublishCallback_t vIncomingPublishCallback );
 
 /**
  * @brief Remove a subscription from the subscription list.
@@ -142,12 +142,13 @@ static void prvRemoveSubscription( MQTTAgentContext_t * pAgentContext,
  * @brief Copy an incoming publish to a response queue.
  *
  * @param[in] pxPublishInfo Info of incoming publish.
- * @param[in] pxResponseQueue Queue to which the publish is copied.
+ * @param[in] vIncomingPublishCallback Function to call when a publish is received on
+ * a topic filter.
  *
  * @return true if the publish was copied to the queue, else false.
  */
-static BaseType_t prvCopyPublishToQueue( MQTTPublishInfo_t * pxPublishInfo,
-                                         QueueHandle_t pxResponseQueue );
+static BaseType_t prvPassPublishToCallback( MQTTPublishInfo_t * pxPublishInfo,
+                                            IncomingPublishCallback_t vIncomingPublishCallback );
 
 /**
  * @brief Populate the parameters of a #Command_t
@@ -305,7 +306,7 @@ static AckInfo_t prvGetAwaitingOperation( MQTTAgentContext_t * pAgentContext,
 static void prvAddSubscription( MQTTAgentContext_t * pAgentContext,
                                 const char * pcTopicFilter,
                                 uint16_t usTopicFilterLength,
-                                QueueHandle_t pxQueue )
+                                IncomingPublishCallback_t vIncomingPublishCallback )
 {
     int32_t i = 0;
     size_t ulAvailableIndex = pAgentContext->maxSubscriptions;
@@ -322,7 +323,7 @@ static void prvAddSubscription( MQTTAgentContext_t * pAgentContext,
                  ( strncmp( pcTopicFilter, pxSubscriptions[ i ].pcSubscriptionFilter, usTopicFilterLength ) == 0 ) )
         {
             /* If a subscription already exists, don't do anything. */
-            if( pxSubscriptions[ i ].pxResponseQueue == pxQueue )
+            if( pxSubscriptions[ i ].vIncomingPublishCallback != vIncomingPublishCallback )
             {
                 LogWarn( ( "Subscription already exists.\n" ) );
                 ulAvailableIndex = pAgentContext->maxSubscriptions;
@@ -331,10 +332,10 @@ static void prvAddSubscription( MQTTAgentContext_t * pAgentContext,
         }
     }
 
-    if( ( ulAvailableIndex < pAgentContext->maxSubscriptions ) && ( pxQueue != NULL ) )
+    if( ( ulAvailableIndex < pAgentContext->maxSubscriptions ) && ( vIncomingPublishCallback != NULL ) )
     {
         pxSubscriptions[ ulAvailableIndex ].usFilterLength = usTopicFilterLength;
-        pxSubscriptions[ ulAvailableIndex ].pxResponseQueue = pxQueue;
+        pxSubscriptions[ ulAvailableIndex ].vIncomingPublishCallback = vIncomingPublishCallback;
         memcpy( pxSubscriptions[ ulAvailableIndex ].pcSubscriptionFilter, pcTopicFilter, usTopicFilterLength );
     }
 }
@@ -355,7 +356,7 @@ static void prvRemoveSubscription( MQTTAgentContext_t * pAgentContext,
             if( strncmp( pxSubscriptions[ i ].pcSubscriptionFilter, pcTopicFilter, usTopicFilterLength ) == 0 )
             {
                 pxSubscriptions[ i ].usFilterLength = 0;
-                pxSubscriptions[ i ].pxResponseQueue = NULL;
+                pxSubscriptions[ i ].vIncomingPublishCallback = NULL;
                 memset( pxSubscriptions[ i ].pcSubscriptionFilter, 0x00, mqttexampleDEMO_BUFFER_SIZE );
             }
         }
@@ -364,8 +365,8 @@ static void prvRemoveSubscription( MQTTAgentContext_t * pAgentContext,
 
 /*-----------------------------------------------------------*/
 
-static BaseType_t prvCopyPublishToQueue( MQTTPublishInfo_t * pxPublishInfo,
-                                         QueueHandle_t pxResponseQueue )
+static BaseType_t prvPassPublishToCallback( MQTTPublishInfo_t * pxPublishInfo,
+                                            IncomingPublishCallback_t vIncomingPublishCallback )
 {
     PublishElement_t xCopiedPublish;
 
@@ -379,8 +380,10 @@ static BaseType_t prvCopyPublishToQueue( MQTTPublishInfo_t * pxPublishInfo,
     memcpy( xCopiedPublish.pcTopicNameBuf, pxPublishInfo->pTopicName, pxPublishInfo->topicNameLength );
     memcpy( xCopiedPublish.pcPayloadBuf, pxPublishInfo->pPayload, pxPublishInfo->payloadLength );
 
-    /* Add to response queue. */
-    return xQueueSendToBack( pxResponseQueue, ( void * ) &xCopiedPublish, mqttexampleDEMO_TICKS_TO_WAIT );
+    /* Call callback. */
+    vIncomingPublishCallback( pxPublishInfo );//_RB_ Need to pass something in here. */
+
+    return pdPASS;
 }
 
 /*-----------------------------------------------------------*/
@@ -633,7 +636,7 @@ static void prvHandleIncomingPublish( MQTTAgentContext_t * pAgentContext,
                 LogDebug( ( "Adding publish to response queue for %.*s\n",
                             pxSubscriptions[ i ].usFilterLength,
                             pxSubscriptions[ i ].pcSubscriptionFilter ) );
-                xPublishCopied = prvCopyPublishToQueue( pxPublishInfo, pxSubscriptions[ i ].pxResponseQueue );
+                xPublishCopied = prvPassPublishToCallback( pxPublishInfo, pxSubscriptions[ i ].vIncomingPublishCallback );
                 /* Ensure the publish was copied to the queue. */
                 configASSERT( xPublishCopied == pdTRUE );
                 xRelayedPublish = true;
@@ -650,7 +653,8 @@ static void prvHandleIncomingPublish( MQTTAgentContext_t * pAgentContext,
         LogWarn( ( "Publish received on topic %.*s with no subscription.\n",
                    pxPublishInfo->topicNameLength,
                    pxPublishInfo->pTopicName ) );
-        xPublishCopied = prvCopyPublishToQueue( pxPublishInfo, pAgentContext->pDefaultResponseQueue ); /*_RB_ pDefaultResponseQueue never seems to get set. */
+//_RB_        xPublishCopied = prvPassPublishToCallback( pxPublishInfo, pAgentContext->vIncomingPublishCallback ); /*_RB_ pDefaultResponseQueue never seems to get set. */
+configASSERT( 0 );
         /* Ensure the publish was copied to the queue. */
         configASSERT( xPublishCopied == pdTRUE );
     }
@@ -689,7 +693,7 @@ static void prvHandleSubscriptionAcks( MQTTAgentContext_t * pAgentContext,
                 prvAddSubscription( pAgentContext,
                                     pxSubscribeInfo[ i ].pTopicFilter,
                                     pxSubscribeInfo[ i ].topicFilterLength,
-                                    pxAckContext->pxResponseQueue );
+                                    pxAckContext->vIncomingPublishCallback );
             }
             else
             {
@@ -1083,13 +1087,13 @@ bool MQTTAgent_Terminate( void )
 }
 
 bool MQTTAgent_Register( MQTTContext_t * pMqttContext,
-                         void * pDefaultResponseQueue,
+                         IncomingPublishCallback_t vIncomingPublishCallback,
                          CommandContext_t * pCommandContext,
                          CommandCallback_t cmdCallback )
 {
     configASSERT( pMqttContext != NULL );
     configASSERT( pCommandContext != NULL );
-    pCommandContext->pxResponseQueue = pDefaultResponseQueue;
+    pCommandContext->vIncomingPublishCallback = vIncomingPublishCallback; /*_RB_ Don't know where this is used. */
     return createAndAddCommand( INITIALIZE, pMqttContext, pCommandContext, cmdCallback );
 }
 

@@ -77,13 +77,15 @@
  * in scope until the associated command is processed, and its callback called.
  * The command callback will set the `xIsComplete` flag, and notify the calling task.
  */
+typedef void (* IncomingPublishCallback_t )( MQTTPublishInfo_t * pxPublishInfo );
 typedef struct CommandContext
 {
     MQTTPublishInfo_t * pxPublishInfo;
-    MQTTSubscribeInfo_t * pxSubscribeInfo;
+    MQTTSubscribeInfo_t * pxSubscribeInfo; /*_RB_ Union? */
     size_t ulSubscriptionCount;
     MQTTStatus_t xReturnStatus;
     bool xIsComplete;
+    IncomingPublishCallback_t vIncomingPublishCallback;
 
     /* The below fields are specific to this FreeRTOS implementation. *//*_RB_ This can be replaced by a user defined type. */
     TaskHandle_t xTaskToNotify;
@@ -95,6 +97,7 @@ typedef struct CommandContext
  * @brief Callback function called when a command completes.
  */
 typedef void (* CommandCallback_t )( CommandContext_t * );
+
 
 /**
  * @brief A type of command for interacting with the MQTT API.
@@ -221,7 +224,7 @@ bool MQTTAgent_Disconnect( MQTTContext_t * pMqttContext,
 bool MQTTAgent_Terminate( void );
 
 bool MQTTAgent_Register( MQTTContext_t * pMqttContext,
-                         void * pDefaultResponseQueue,
+                         IncomingPublishCallback_t pDefaultResponseQueue,
                          CommandContext_t * pCommandContext,
                          CommandCallback_t cmdCallback );
 

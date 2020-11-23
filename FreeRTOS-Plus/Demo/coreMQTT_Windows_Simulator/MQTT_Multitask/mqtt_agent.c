@@ -442,6 +442,7 @@ static MQTTStatus_t prvProcessCommand( Command_t * pxCommand )
     MQTTContext_t * pMQTTContext = pxCommand->pMqttContext;
     MQTTAgentContext_t * pAgentContext = NULL;
     uint32_t i;
+    uint32_t ulZeroTimeout = 0UL;
 
     switch( pxCommand->xCommandType )
     {
@@ -596,7 +597,7 @@ static MQTTStatus_t prvProcessCommand( Command_t * pxCommand )
      * the MQTT connection still exists. */
     if( ( xStatus == MQTTSuccess ) && ( pMQTTContext != NULL ) && ( pMQTTContext->connectStatus == MQTTConnected ) )
     {
-        xStatus = MQTT_ProcessLoop( pMQTTContext, mqttexamplePROCESS_LOOP_TIMEOUT_MS );
+        xStatus = MQTT_ProcessLoop( pMQTTContext, ulZeroTimeout );
     }
 
     return xStatus;
@@ -1038,10 +1039,26 @@ bool MQTTAgent_ProcessLoop( MQTTContext_t * pMqttContext,
                             CommandContext_t * pCommandContext,
                             CommandCallback_t cmdCallback )
 {
+    bool cReturn;
+
     configASSERT( pMqttContext != NULL );
     /* Not implemented yet. */
     ( void ) timeoutMs;
-    return createAndAddCommand( PROCESSLOOP, pMqttContext, pCommandContext, cmdCallback );
+
+    /* This event is only used to ensure MQTT_ProcessLoop() is called.  If there is
+     * already data in the queue then MQTT_ProcessLoop() will get called anyway so
+     * there is no point adding another message to the queue.
+     */
+    if( uxQueueMessagesWaiting( xCommandQueue ) == ( UBaseType_t ) 0 )
+    {
+        cReturn = createAndAddCommand( PROCESSLOOP, pMqttContext, pCommandContext, cmdCallback );
+    }
+    else
+    {
+        cReturn = true;
+    }
+
+    return cReturn;
 }
 
 bool MQTTAgent_Ping( MQTTContext_t * pMqttContext,
@@ -1090,7 +1107,6 @@ bool MQTTAgent_Free( MQTTContext_t * pMqttContext,
 static void prvMQTTAgentTask( void * pvParameters )
 {
 //_RB_    BaseType_t xNetworkResult = pdFAIL;
-    MQTTStatus_t xMQTTStatus = MQTTSuccess;
     MQTTContext_t * pMqttContext = NULL;
 
     ( void ) pvParameters;

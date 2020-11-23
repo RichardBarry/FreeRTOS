@@ -85,9 +85,9 @@ typedef struct CommandContext
     MQTTStatus_t xReturnStatus;
     bool xIsComplete;
 
-    /* The below fields are specific to this FreeRTOS implementation. */
+    /* The below fields are specific to this FreeRTOS implementation. *//*_RB_ This can be replaced by a user defined type. */
     TaskHandle_t xTaskToNotify;
-    uint32_t ulNotificationBit;
+    uint32_t ulNotificationValue;
     QueueHandle_t pxResponseQueue;
 } CommandContext_t;
 
@@ -101,6 +101,7 @@ typedef void (* CommandCallback_t )( CommandContext_t * );
  */
 typedef enum CommandType
 {
+    NONE = 0,    /**< @brief No command received.  Must be zero (its memset() value). */
     PROCESSLOOP, /**< @brief Call MQTT_ProcessLoop(). */
     PUBLISH,     /**< @brief Call MQTT_Publish(). */
     SUBSCRIBE,   /**< @brief Call MQTT_Subscribe(). */
@@ -190,42 +191,46 @@ MQTTStatus_t MQTTAgent_ResumeSession( MQTTContext_t * pMqttContext,
 bool MQTTAgent_Subscribe( MQTTContext_t * pMqttContext,
                           MQTTSubscribeInfo_t * pSubscriptionList,
                           size_t subscriptionCount,
-                          CommandContext_t * pContext,
+                          CommandContext_t * pCommandContext,
                           CommandCallback_t cmdCallback );
 
 bool MQTTAgent_Unsubscribe( MQTTContext_t * pMqttContext,
                             MQTTSubscribeInfo_t * pSubscriptionList,
                             size_t subscriptionCount,
-                            CommandContext_t * pContext,
+                            CommandContext_t * pCommandContext,
                             CommandCallback_t cmdCallback );
 
 bool MQTTAgent_Publish( MQTTContext_t * pMqttContext,
                         MQTTPublishInfo_t * pPublishInfo,
-                        CommandContext_t * pContext,
+                        CommandContext_t * pCommandContext,
                         CommandCallback_t cmdCallback );
 
 bool MQTTAgent_ProcessLoop( MQTTContext_t * pMqttContext,
                             uint32_t timeoutMs,
-                            CommandContext_t * pContext,
+                            CommandContext_t * pCommandContext,
                             CommandCallback_t cmdCallback );
 
 bool MQTTAgent_Ping( MQTTContext_t * pMqttContext,
-                     CommandContext_t * pContext,
+                     CommandContext_t * pCommandContext,
                      CommandCallback_t cmdCallback );
 
 bool MQTTAgent_Disconnect( MQTTContext_t * pMqttContext,
-                           CommandContext_t * pContext,
+                           CommandContext_t * pCommandContext,
                            CommandCallback_t cmdCallback );
 
 bool MQTTAgent_Terminate( void );
 
 bool MQTTAgent_Register( MQTTContext_t * pMqttContext,
                          void * pDefaultResponseQueue,
-                         CommandContext_t * pContext,
+                         CommandContext_t * pCommandContext,
                          CommandCallback_t cmdCallback );
 
 bool MQTTAgent_Free( MQTTContext_t * pMqttContext,
-                     CommandContext_t * pContext,
+                     CommandContext_t * pCommandContext,
                      CommandCallback_t cmdCallback );
+
+TaskHandle_t MQTTAgent_CreateAgent( const configSTACK_DEPTH_TYPE uxStackDepth,
+                                    const UBaseType_t uxPriority,
+                                    const UBaseType_t uxCommandQueueLength );
 
 #endif /* MQTT_AGENT_H */

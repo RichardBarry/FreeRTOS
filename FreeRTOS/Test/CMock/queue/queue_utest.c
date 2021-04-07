@@ -1,4 +1,5 @@
 /*
+ * FreeRTOS V202012.00
  * Copyright (C) 2020 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -18,9 +19,11 @@
  * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
- * http://aws.amazon.com/freertos
- * http://www.FreeRTOS.org
+ * https://www.FreeRTOS.org
+ * https://github.com/FreeRTOS
+ *
  */
+/*! @file queue_utest.c */
 
 /* C runtime includes. */
 #include <stdlib.h>
@@ -33,45 +36,64 @@
 
 /* Test includes. */
 #include "unity.h"
+#include "unity_memory.h"
 
 /* Mock includes. */
 #include "mock_task.h"
+#include "mock_list.h"
+#include "mock_fake_assert.h"
+#include "mock_fake_port.h"
 
 /* ============================  GLOBAL VARIABLES =========================== */
-static uint16_t usMallocFreeCalls = 0;
 
 /* ==========================  CALLBACK FUNCTIONS =========================== */
 
 void * pvPortMalloc( size_t xSize )
 {
-    return malloc(xSize);
+    return unity_malloc( xSize );
 }
 void vPortFree( void * pv )
 {
-    return free(pv);
+    return unity_free( pv );
 }
+
 /*******************************************************************************
  * Unity fixtures
  ******************************************************************************/
 void setUp( void )
 {
+    mock_task_Init();
+    mock_fake_assert_Init();
+    mock_fake_port_Init();
+    vFakeAssert_Ignore();
+    vFakePortEnterCriticalSection_Ignore();
+    vFakePortExitCriticalSection_Ignore();
+
+    /* Track calls to malloc / free */
+    UnityMalloc_StartTest();
 }
 
-/* called before each testcase */
+/*! called before each testcase */
 void tearDown( void )
 {
-    TEST_ASSERT_EQUAL_INT_MESSAGE( 0, usMallocFreeCalls,
-                                   "free is not called the same number of times as malloc,"
-                                   "you might have a memory leak!!" );
-    usMallocFreeCalls = 0;
+    UnityMalloc_EndTest();
+
+    mock_task_Verify();
+    mock_task_Destroy();
+
+    mock_fake_assert_Verify();
+    mock_fake_assert_Destroy();
+
+    mock_fake_port_Verify();
+    mock_fake_port_Destroy();
 }
 
-/* called at the beginning of the whole suite */
+/*! called at the beginning of the whole suite */
 void suiteSetUp()
 {
 }
 
-/* called at the end of the whole suite */
+/*! called at the end of the whole suite */
 int suiteTearDown( int numFailures )
 {
     return numFailures;
@@ -79,10 +101,13 @@ int suiteTearDown( int numFailures )
 
 /*!
  * @brief xQueueCreate happy path.
- *
+ * @coverage xQueueGenericCreate
  */
 void test_xQueueCreate_Success( void )
 {
-    QueueHandle_t xQueue = xQueueCreate(1 , 1);
+    vListInitialise_Ignore();
+    QueueHandle_t xQueue = xQueueCreate( 1, 1 );
+
     TEST_ASSERT_NOT_EQUAL( NULL, xQueue );
+    vQueueDelete(xQueue);
 }

@@ -78,7 +78,7 @@ extern void vLoggingPrintf( const char * pcFormatString,
  *
  * #define democonfigCLIENT_IDENTIFIER				"insert here."
  */
-
+#define democonfigCLIENT_IDENTIFIER "agent_test"
 
 /**
  * @brief Endpoint of the MQTT broker to connect to.
@@ -95,7 +95,7 @@ extern void vLoggingPrintf( const char * pcFormatString,
  *
  * #define democonfigMQTT_BROKER_ENDPOINT				"insert here."
  */
-
+#define democonfigMQTT_BROKER_ENDPOINT "10.10.10.10"
 
 /**
  * @brief The port to use for the demo.
@@ -110,6 +110,7 @@ extern void vLoggingPrintf( const char * pcFormatString,
  *
  * #define democonfigMQTT_BROKER_PORT    ( insert here. )
  */
+#define democonfigMQTT_BROKER_PORT 50000
 
 /**
  * @brief Server's root CA certificate.
@@ -246,13 +247,13 @@ extern void vLoggingPrintf( const char * pcFormatString,
  * symbol.
  */
 #include "core_mqtt.h" /* Include coreMQTT header for MQTT_LIBRARY_VERSION macro. */
-#define democonfigMQTT_LIB                              "core-mqtt@"MQTT_LIBRARY_VERSION
+#define democonfigMQTT_LIB                  "core-mqtt@"MQTT_LIBRARY_VERSION
 
 /**
  * @brief Whether to use mutual authentication. If this macro is not set to 1
  * or not defined, then plaintext TCP will be used instead of TLS over TCP.
  */
-#define democonfigUSE_TLS                               1
+#define democonfigUSE_TLS                               0
 
 /**
  * @brief Set the stack size of the main demo task.
@@ -265,13 +266,8 @@ extern void vLoggingPrintf( const char * pcFormatString,
 /**
  * @brief The number of simple sub-pub tasks to create.
  */
-#define democonfigNUM_SIMPLE_SUB_PUB_TASKS_TO_CREATE    2
+#define democonfigNUM_SIMPLE_SUB_PUB_TASKS_TO_CREATE    1
 #define democonfigSIMPLE_SUB_PUB_TASK_STACK_SIZE        ( configMINIMAL_STACK_SIZE )
-
-/**
- * @brief The length of the queue used to hold commands for the coreMQTT Agent.
- */
-#define MQTT_AGENT_COMMAND_QUEUE_LENGTH                 10
 
 /**
  * Provide default values for undefined configuration settings.
@@ -292,5 +288,13 @@ extern void vLoggingPrintf( const char * pcFormatString,
     #include "core_mqtt.h" /* Include coreMQTT header for MQTT_LIBRARY_VERSION macro. */
     #define democonfigMQTT_LIB    "core-mqtt@"MQTT_LIBRARY_VERSION
 #endif
+
+#define SUBSCRIPTION_MANAGER_MAX_SUBSCRIPTIONS    50U
+
+ /**
+  * @brief The length of the queue used to hold commands for the coreMQTT Agent.
+  */
+/*_RB_ Temporary workaround for running out of command queue spaces when re-subscribing to topics after a disconnect. */
+#define MQTT_AGENT_COMMAND_QUEUE_LENGTH           ( SUBSCRIPTION_MANAGER_MAX_SUBSCRIPTIONS * 2 )
 
 #endif /* DEMO_CONFIG_H */

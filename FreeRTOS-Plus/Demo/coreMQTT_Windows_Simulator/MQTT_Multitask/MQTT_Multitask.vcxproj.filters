@@ -59,9 +59,6 @@
     <ClInclude Include="subscription-manager\subscription_manager.h">
       <Filter>Headers</Filter>
     </ClInclude>
-    <ClInclude Include="..\Common\core_mqtt_config.h">
-      <Filter>Headers</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\..\Source\Application-Protocols\coreMQTT-Agent\source\include\core_mqtt_agent.h">
       <Filter>Additional Libraries\coreMQTT-Agent\include</Filter>
     </ClInclude>
@@ -106,6 +103,9 @@
     </ClInclude>
     <ClInclude Include="..\..\..\Source\Application-Protocols\network_transport\tcp_sockets_wrapper\include\tcp_sockets_wrapper.h">
       <Filter>Additional Network Transport Files\TCP Sockets Wrapper\include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Common\core_mqtt_config.h">
+      <Filter>Config</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

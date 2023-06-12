@@ -398,8 +398,10 @@ void vLoggingPrintf( const char * pcFormat,
                 xCurrentTask = GetCurrentThread();
                 iOriginalPriority = GetThreadPriority( xCurrentTask );
                 SetThreadPriority( GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL );
+taskENTER_CRITICAL(); /*_RB_*/
                 uxStreamBufferAdd( xLogStreamBuffer, 0, ( const uint8_t * ) &( xLength ), sizeof( xLength ) );
                 uxStreamBufferAdd( xLogStreamBuffer, 0, ( const uint8_t * ) cOutputString, xLength );
+taskEXIT_CRITICAL(); /*_RB_*/
                 SetThreadPriority( GetCurrentThread(), iOriginalPriority );
             }
 
@@ -435,7 +437,9 @@ static void prvLoggingFlushBuffer( void )
     while( uxStreamBufferGetSize( xLogStreamBuffer ) > sizeof( xLength ) )
     {
         memset( cPrintString, 0x00, dlMAX_PRINT_STRING_LENGTH );
+
         uxStreamBufferGet( xLogStreamBuffer, 0, ( uint8_t * ) &xLength, sizeof( xLength ), pdFALSE );
+        configASSERT( xLength < ( dlMAX_PRINT_STRING_LENGTH - sizeof( xLength ) ) ); /*_RB_*/
         uxStreamBufferGet( xLogStreamBuffer, 0, ( uint8_t * ) cPrintString, xLength, pdFALSE );
 
         /* Write the message to standard out if requested to do so when
@@ -539,6 +543,6 @@ static void prvLogToFile( const char * pcMessage,
 
 void vPlatformInitLogging(void)
 {
-    vLoggingInit(pdTRUE, pdFALSE, pdFALSE, 0U, 0U);
+    vLoggingInit( pdTRUE, pdFALSE, pdFALSE, 0U, 0U );
 }
 /*-----------------------------------------------------------*/

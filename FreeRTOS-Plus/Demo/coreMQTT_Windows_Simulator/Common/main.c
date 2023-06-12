@@ -59,7 +59,7 @@
 
 /*-----------------------------------------------------------*/
 
-extern void vPlatformInitIpStack( void );
+extern void vPlatformInitIPStack( void );
 extern void vStartSimpleMQTTDemo( void );
 
 /*-----------------------------------------------------------*/
@@ -73,7 +73,7 @@ int main( void )
     vStartSimpleMQTTDemo();
 
     /* Initialize FreeRTOS+TCP */
-    vPlatformInitIpStack();
+    vPlatformInitIPStack();
 
     /* Start the RTOS scheduler. */
     vTaskStartScheduler();

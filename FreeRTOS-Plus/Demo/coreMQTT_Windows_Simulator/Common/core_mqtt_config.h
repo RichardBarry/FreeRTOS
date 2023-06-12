@@ -103,7 +103,7 @@ extern void vLoggingPrintf( const char * pcFormatString,
  * the maximum number of acknowledgments that can be outstanding at any one time.
  * The higher this number is the greater the agent's RAM consumption will be.
  */
-#define MQTT_AGENT_MAX_OUTSTANDING_ACKS         ( 20U )
+#define MQTT_AGENT_MAX_OUTSTANDING_ACKS         ( 200U ) /*There are probably depenencies between this and some mqtt agent constants that should be in the agent's documentation. */
 
 /**
  * @brief Time in MS that the MQTT agent task will wait in the Blocked state (so
@@ -120,6 +120,12 @@ extern void vLoggingPrintf( const char * pcFormatString,
  * @brief The number of command structures to allocate in the pool
  * for the agent.
  */
-#define MQTT_COMMAND_CONTEXTS_POOL_SIZE         10
+#define MQTT_COMMAND_CONTEXTS_POOL_SIZE         100
+
+
+/* The index used by the MQTT agent when calling xTaskNotifyIndexed() from the callback used by
+ * the synchronous API.  _RB_ Took me ages to find this file in the MSVC project - this config was in "headers" rather than "Config".  PLEASE put all the config files in one place - the kernel and TCP files are elsewhere again. */
+#define MQTT_AGENT_NOTIFICATION_INDEX 0
+
 
 #endif /* ifndef CORE_MQTT_CONFIG_H */

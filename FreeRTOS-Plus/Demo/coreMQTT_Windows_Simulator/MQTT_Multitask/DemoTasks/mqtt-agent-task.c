@@ -649,6 +649,7 @@ static MQTTStatus_t prvHandleResubscribe( void )
 
         /* The block time can be 0 as the command loop is not running at this point. */
         xCommandParams.blockTimeMs = 0U;
+/*_RB_ There is a design issue here as the queue may have fewer than usNumSubscriptions spaces. */
         xCommandParams.cmdCompleteCallback = prvSubscriptionCommandCallback;
         xCommandParams.pCmdCompleteCallbackContext = ( void * ) &xSubArgs;
 
@@ -981,6 +982,8 @@ static void prvMQTTAgentTask( void * pvParameters )
             configASSERT( xConnectStatus == MQTTSuccess );
         }
     } while( xMQTTStatus != MQTTSuccess );
+
+    configASSERT( xMQTTStatus == ~1 );
 }
 
 /*-----------------------------------------------------------*/

@@ -267,9 +267,6 @@ void vLoggingPrintf( const char * pcFormat,
     uint32_t ulIPAddress;
     const char * pcTaskName;
     const char * pcNoTask = "None";
-    int iOriginalPriority;
-    HANDLE xCurrentTask;
-
 
     if( ( xStdoutLoggingUsed != pdFALSE ) || ( xDiskFileLoggingUsed != pdFALSE ) || ( xUDPLoggingUsed != pdFALSE ) )
     {
@@ -395,14 +392,12 @@ void vLoggingPrintf( const char * pcFormat,
                  * as there are potentially multiple writers.  The stream buffer is
                  * only thread safe when there is a single writer (likewise for
                  * reading from the buffer). */
-                xCurrentTask = GetCurrentThread();
-                iOriginalPriority = GetThreadPriority( xCurrentTask );
-                SetThreadPriority( GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL );
-taskENTER_CRITICAL(); /*_RB_*/
-                uxStreamBufferAdd( xLogStreamBuffer, 0, ( const uint8_t * ) &( xLength ), sizeof( xLength ) );
-                uxStreamBufferAdd( xLogStreamBuffer, 0, ( const uint8_t * ) cOutputString, xLength );
-taskEXIT_CRITICAL(); /*_RB_*/
-                SetThreadPriority( GetCurrentThread(), iOriginalPriority );
+                taskENTER_CRITICAL();
+                {
+                    uxStreamBufferAdd( xLogStreamBuffer, 0, ( const uint8_t * ) &( xLength ), sizeof( xLength ) );
+                    uxStreamBufferAdd( xLogStreamBuffer, 0, ( const uint8_t * ) cOutputString, xLength );
+                }
+                taskEXIT_CRITICAL();
             }
 
             /* xDirectPrint is initialized to pdTRUE, and while it remains true the
@@ -438,9 +433,13 @@ static void prvLoggingFlushBuffer( void )
     {
         memset( cPrintString, 0x00, dlMAX_PRINT_STRING_LENGTH );
 
-        uxStreamBufferGet( xLogStreamBuffer, 0, ( uint8_t * ) &xLength, sizeof( xLength ), pdFALSE );
-        configASSERT( xLength < ( dlMAX_PRINT_STRING_LENGTH - sizeof( xLength ) ) ); /*_RB_*/
-        uxStreamBufferGet( xLogStreamBuffer, 0, ( uint8_t * ) cPrintString, xLength, pdFALSE );
+        taskENTER_CRITICAL();
+        {
+            uxStreamBufferGet( xLogStreamBuffer, 0, ( uint8_t * ) &xLength, sizeof( xLength ), pdFALSE );
+            configASSERT( xLength < ( dlMAX_PRINT_STRING_LENGTH - sizeof( xLength ) ) ); /*_RB_*/
+            uxStreamBufferGet( xLogStreamBuffer, 0, ( uint8_t * ) cPrintString, xLength, pdFALSE );
+        }
+        taskEXIT_CRITICAL();
 
         /* Write the message to standard out if requested to do so when
          * vLoggingInit() was called, or if the network is not yet up. */

@@ -202,8 +202,8 @@ static bool prvSubscribeToTopic( MQTTQoS_t xQoS,
  * for all MQTT brokers.  Can also be QoS2 if supported by the broker.  AWS IoT
  * does not support QoS2.
  */
-static bool prvSubscribeToTopicUsingSyncAPI( MQTTQoS_t xQoS,
-                                             char* pcTopicFilter );
+static bool prvSubscribeToTopicSync( MQTTQoS_t xQoS,
+                                     char* pcTopicFilter );
 
 
 /**
@@ -443,11 +443,12 @@ static bool prvSubscribeToTopic( MQTTQoS_t xQoS,
 /*-----------------------------------------------------------*/
 
 static bool prvSubscribeToTopicSync( MQTTQoS_t xQoS,
-                                             char* pcTopicFilter )
+                                     char* pcTopicFilter )
 {
     MQTTStatus_t xStatus;
     MQTTAgentSubscribeArgs_t xSubscribeArgs;
     MQTTSubscribeInfo_t xSubscribeInfo = { 0 };
+    bool xSubscriptionAdded;
 
     /* Complete the subscribe information.  The topic string must persist for
      * duration of subscription! */
@@ -468,6 +469,21 @@ static bool prvSubscribeToTopicSync( MQTTQoS_t xQoS,
     if( xStatus == MQTTSuccess )
     {
         LogInfo( ( "Subscribed to %s", pcTopicFilter ) );
+
+        /* Add subscription so that incoming publishes are routed to the application
+         * callback. */
+        xSubscriptionAdded = addSubscription( ( SubscriptionElement_t * ) xGlobalMqttAgentContext.pIncomingCallbackContext,
+                                              pcTopicFilter,
+                                              xSubscribeInfo.topicFilterLength,
+                                              prvIncomingPublishCallback,
+                                              NULL );
+
+        if( xSubscriptionAdded == false )
+        {
+            LogError( ( "Failed to register an incoming publish callback for topic %.*s.",
+                        xSubscribeInfo.topicFilterLength,
+                        pcTopicFilter ) );
+        }
     }
     else
     {
@@ -587,8 +603,9 @@ static void prvSimpleSubscribePublishTask( void * pvParameters )
 
             /* Add a little randomness into the delay so the tasks don't remain
              * in lockstep. */
-            xTicksToDelay = pdMS_TO_TICKS( mqttexampleDELAY_BETWEEN_PUBLISH_OPERATIONS_MS ) +
-                            ( uxRand() % 0xff );
+//            xTicksToDelay = pdMS_TO_TICKS( mqttexampleDELAY_BETWEEN_PUBLISH_OPERATIONS_MS ) +
+//                            ( uxRand() % 0xff );
+
 //            vTaskDelay( xTicksToDelay );
         }
     }

@@ -110,7 +110,7 @@ extern void vLoggingPrintf( const char * pcFormatString,
  *
  * #define democonfigMQTT_BROKER_PORT    ( insert here. )
  */
-#define democonfigMQTT_BROKER_PORT 50000
+#define democonfigMQTT_BROKER_PORT ( 50000 )
 
 /**
  * @brief Server's root CA certificate.
@@ -266,7 +266,7 @@ extern void vLoggingPrintf( const char * pcFormatString,
 /**
  * @brief The number of simple sub-pub tasks to create.
  */
-#define democonfigNUM_SIMPLE_SUB_PUB_TASKS_TO_CREATE    1
+#define democonfigNUM_SIMPLE_SUB_PUB_TASKS_TO_CREATE    10
 #define democonfigSIMPLE_SUB_PUB_TASK_STACK_SIZE        ( configMINIMAL_STACK_SIZE )
 
 /**

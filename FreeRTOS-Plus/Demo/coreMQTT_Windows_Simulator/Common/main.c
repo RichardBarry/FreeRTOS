@@ -59,7 +59,7 @@
 
 /*-----------------------------------------------------------*/
 
-extern void vPlatformInitIPStack( void );
+extern void vPlatformInitIpStack( void );
 extern void vStartSimpleMQTTDemo( void );
 
 /*-----------------------------------------------------------*/
@@ -70,10 +70,10 @@ int main( void )
     vPlatformInitLogging();
 
     /* Start demo task */
-    vStartSimpleMQTTDemo();
+    vStartSimpleMQTTDemo(); /*_RB_ Should be done after the TCP stack is initialised. */
 
     /* Initialize FreeRTOS+TCP */
-    vPlatformInitIPStack();
+    vPlatformInitIpStack(); /*_RB_ Keeping the capitalisation of acronyms the same is pretty easy.  The line above uses all upper case. */
 
     /* Start the RTOS scheduler. */
     vTaskStartScheduler();

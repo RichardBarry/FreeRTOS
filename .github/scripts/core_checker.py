@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# python >= 3.4 
+# python >= 3.4
 
 import os
 from common.header_checker import HeaderChecker
@@ -43,11 +43,13 @@ FREERTOS_IGNORED_EXTENSIONS = [
     '.cdkws',
     '.cfg',
     '.cgp',
+    '.checksum',
     '.cmake',
     '.cmd',
     '.config',
     '.cpp',
     '.cproj',
+    '.cproject',
     '.crun',
     '.css',
     '.csv',
@@ -71,6 +73,7 @@ FREERTOS_IGNORED_EXTENSIONS = [
     '.dtd',
     '.dts',
     '.elf',
+    '.emProject',
     '.env_conf',
     '.ewd',
     '.ewp',
@@ -120,6 +123,7 @@ FREERTOS_IGNORED_EXTENSIONS = [
     '.la',
     '.launch',
     '.lcf',
+    '.ld',
     '.lds',
     '.lib',
     '.lk1',
@@ -172,9 +176,11 @@ FREERTOS_IGNORED_EXTENSIONS = [
     '.pref',
     '.prefs',
     '.prj',
+    '.project',
     '.properties',
     '.ps1',
     '.ptf',
+    '.py',
     '.r79',
     '.rapp',
     '.rc',
@@ -184,6 +190,7 @@ FREERTOS_IGNORED_EXTENSIONS = [
     '.resources',
     '.rom',
     '.rprj',
+    '.s',
     '.s79',
     '.s82',
     '.s90',
@@ -200,6 +207,7 @@ FREERTOS_IGNORED_EXTENSIONS = [
     '.sig',
     '.sln',
     '.spec',
+    '.sprj',
     '.stf',
     '.stg',
     '.suo',
@@ -251,22 +259,58 @@ FREERTOS_IGNORED_PATTERNS = [
     r'.*mbedtls_config\.h.*',
     r'.*mbedtls_config\.h.*',
     r'.*CMSIS.*',
+    r'.*/Nordic_Code/*',
+    r'.*/Nuvoton_Code/*',
+    r'.*/ST_Code/*',
+    r'.*/NXP_Code/*',
     r'.*/makefile',
     r'.*/Makefile',
+    r'.*/printf-stdarg\.c.*',
+    r'.*/startup.*',
+    r'.*/Startup.*',
     r'.*/trcConfig\.h.*',
     r'.*/trcConfig\.c.*',
     r'.*/trcSnapshotConfig\.h.*',
+    r'.*/trcKernelPortConfig\.h.*',
+    r'.*/trcKernelPortSnapshotConfig\.h.*',
+    r'.*/MicroZed_hw_platform.*',
+    r'.*/ThirdParty/.*',
+    r'FreeRTOS\-Plus/Demo/Common/WinPCap/.*',
+    r'FreeRTOS\-Plus/Source/FreeRTOS-Plus-Trace/.*',
+    r'FreeRTOS-Plus/Demo/FreeRTOS_Plus_CLI_with_Trace_Windows_Simulator/Trace_Recorder_Configuration/.*',
+    r'FreeRTOS/Demo/lwIP_AVR32_UC3/.*',
+    r'FreeRTOS/Demo/Tensilica_Simulator_Xplorer_XCC/.*',
+    r'FreeRTOS/Demo/CORTEX_LM3S102_GCC/makedefs',
+    r'FreeRTOS/Demo/AVR32_UC3/FreeRTOSConfig.h',
+    r'FreeRTOS/Demo/RX700_RX72N_EnvisionKit_GCC_e2studio/src/smc_gen/.*',
+    r'FreeRTOS/Demo/RX700_RX72N_EnvisionKit_IAR_e2studio_EWRX/src/smc_gen/.*',
+    r'FreeRTOS/Demo/RX700_RX72N_EnvisionKit_Renesas_e2studio_CS\+/src/smc_gen/.*'
 ]
 
 FREERTOS_IGNORED_FILES = [
+    '.cproject',
+    '.project',
     'fyi-another-way-to-ignore-file.txt',
     'mbedtls_config.h',
-    'requirements.txt'
+    'mbedtls_config_v3.2.1.h',
+    'requirements.txt',
+    'run-cbmc-proofs.py',
+    '.editorconfig',
+    'lcovrc',
+    'htif.c', 'htif.h',
+    'ethernetif.c',
+    'platform.c',
+    'platform.h',
+    'platform_config.h',
+    'FreeRTOS_asm_vectors.S',
+    'interrupt_vector.s',
+    'reg_test.S',
+    'gdbinit',
 ]
 
 FREERTOS_HEADER = [
     '/*\n',
-    ' * FreeRTOS V202012.00\n',
+    ' * FreeRTOS V202212.00\n',
     ' * Copyright (C) 2020 Amazon.com, Inc. or its affiliates.  All Rights Reserved.\n',
     ' *\n',
     ' * Permission is hereby granted, free of charge, to any person obtaining a copy of\n',
@@ -292,12 +336,14 @@ FREERTOS_HEADER = [
     ' */\n',
 ]
 
+FREERTOS_COPYRIGHT_REGEX = r"^( *(\/\*|\*|#|\/\/))? Copyright \(C\) 20\d\d Amazon.com, Inc. or its affiliates.  All Rights Reserved\.( \*\/)?$"
+
 def main():
     parser = HeaderChecker.configArgParser()
     args   = parser.parse_args()
 
     # Configure the checks then run
-    checker = HeaderChecker(FREERTOS_HEADER)
+    checker = HeaderChecker(FREERTOS_HEADER, copyright_regex=FREERTOS_COPYRIGHT_REGEX)
     checker.ignoreExtension(*FREERTOS_IGNORED_EXTENSIONS)
     checker.ignorePattern(*FREERTOS_IGNORED_PATTERNS)
     checker.ignoreFile(*FREERTOS_IGNORED_FILES)
@@ -311,4 +357,3 @@ def main():
 
 if __name__ == '__main__':
     exit(main())
-

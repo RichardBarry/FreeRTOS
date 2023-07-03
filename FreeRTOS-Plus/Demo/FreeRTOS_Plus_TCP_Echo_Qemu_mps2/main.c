@@ -1,5 +1,5 @@
 /*
- * FreeRTOS V202012.00
+ * FreeRTOS V202212.00
  * Copyright (C) 2020 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -43,16 +43,7 @@ extern void initialise_monitor_handles(void);
 
 int main ()
 {
-#if ( mainCREATE_NETWORKING_DEMO_ONLY == 1 )
-    {
-       main_tcp_echo_client_tasks();
-    }
-#else
-    {
-    #error "Invalid Selection..." \
-           "\nPlease Select a Demo application from the main command"
-    }
-#endif
+    main_tcp_echo_client_tasks();
     return 0;
 }
 

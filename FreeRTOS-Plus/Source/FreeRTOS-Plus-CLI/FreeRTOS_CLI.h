@@ -1,6 +1,6 @@
 /*
- * FreeRTOS+CLI V1.0.4
- * Copyright (C) 2017 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
+ * FreeRTOS V202212.00
+ * Copyright (C) 2020 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -19,14 +19,19 @@
  * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
- * http://www.FreeRTOS.org
- * http://aws.amazon.com/freertos
+ * https://www.FreeRTOS.org
+ * https://github.com/FreeRTOS
  *
- * 1 tab == 4 spaces!
  */
 
 #ifndef COMMAND_INTERPRETER_H
 #define COMMAND_INTERPRETER_H
+
+/* *INDENT-OFF* */
+#ifdef __cplusplus
+    extern "C" {
+#endif
+/* *INDENT-ON* */
 
 /* The prototype to which callback functions used to process command line
 commands must comply.  pcWriteBuffer is a buffer into which the output from
@@ -45,6 +50,13 @@ typedef struct xCOMMAND_LINE_INPUT
 	int8_t cExpectedNumberOfParameters;			/* Commands expect a fixed number of parameters, which may be zero. */
 } CLI_Command_Definition_t;
 
+/* The structure that defines a command line list entry. */
+typedef struct xCOMMAND_INPUT_LIST
+{
+	const CLI_Command_Definition_t *pxCommandLineDefinition;
+	struct xCOMMAND_INPUT_LIST *pxNext;
+} CLI_Definition_List_Item_t;
+
 /* For backward compatibility. */
 #define xCommandLineInput CLI_Command_Definition_t
 
@@ -54,7 +66,18 @@ typedef struct xCOMMAND_LINE_INPUT
  * handled by the command interpreter.  Once a command has been registered it
  * can be executed from the command line.
  */
-BaseType_t FreeRTOS_CLIRegisterCommand( const CLI_Command_Definition_t * const pxCommandToRegister );
+#if ( configSUPPORT_DYNAMIC_ALLOCATION == 1 )
+	BaseType_t FreeRTOS_CLIRegisterCommand( const CLI_Command_Definition_t * const pxCommandToRegister );
+#endif
+
+/*
+ * Static version of the above function which allows the application writer
+ * to supply the memory used for a command line list entry.
+ */
+#if ( configSUPPORT_STATIC_ALLOCATION == 1 )
+	BaseType_t FreeRTOS_CLIRegisterCommandStatic( const CLI_Command_Definition_t * const pxCommandToRegister,
+												  CLI_Definition_List_Item_t * pxCliDefinitionListItemBuffer );
+#endif
 
 /*
  * Runs the command interpreter for the command string "pcCommandInput".  Any
@@ -89,17 +112,11 @@ char *FreeRTOS_CLIGetOutputBuffer( void );
  */
 const char *FreeRTOS_CLIGetParameter( const char *pcCommandString, UBaseType_t uxWantedParameter, BaseType_t *pxParameterStringLength );
 
+/* *INDENT-OFF* */
+#ifdef __cplusplus
+    }
+#endif
+/* *INDENT-ON* */
+
 #endif /* COMMAND_INTERPRETER_H */
-
-
-
-
-
-
-
-
-
-
-
-
 

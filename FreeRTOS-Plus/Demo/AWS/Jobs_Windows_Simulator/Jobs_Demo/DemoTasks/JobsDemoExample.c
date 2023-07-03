@@ -1,5 +1,5 @@
 /*
- * FreeRTOS V202012.00
+ * FreeRTOS V202212.00
  * Copyright (C) 2020 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -68,6 +68,7 @@
 /* Kernel includes. */
 #include "FreeRTOS.h"
 #include "task.h"
+#include "queue.h"
 
 /* Jobs library header. */
 #include "jobs.h"
@@ -142,7 +143,7 @@
  * This demo program expects this key to be in the Job document. It is a key
  * specific to this demo.
  */
-#define jobsexampleQUERY_KEY_FOR_ACTION             jobsexampleQUERY_KEY_FOR_JOBS_DOC ".action"
+#define jobsexampleQUERY_KEY_FOR_ACTION             "action"
 
 /**
  * @brief The length of #jobsexampleQUERY_KEY_FOR_ACTION.
@@ -157,7 +158,7 @@
  * is either "publish" or "print". It represents the message that should be
  * published or printed, respectively.
  */
-#define jobsexampleQUERY_KEY_FOR_MESSAGE            jobsexampleQUERY_KEY_FOR_JOBS_DOC ".message"
+#define jobsexampleQUERY_KEY_FOR_MESSAGE            "message"
 
 /**
  * @brief The length of #jobsexampleQUERY_KEY_FOR_MESSAGE.
@@ -172,7 +173,7 @@
  * is "publish". It represents the MQTT topic on which the message should be
  * published.
  */
-#define jobsexampleQUERY_KEY_FOR_TOPIC              jobsexampleQUERY_KEY_FOR_JOBS_DOC ".topic"
+#define jobsexampleQUERY_KEY_FOR_TOPIC              "topic"
 
 /**
  * @brief The length of #jobsexampleQUERY_KEY_FOR_TOPIC.
@@ -181,14 +182,14 @@
 
 /**
  * @brief Utility macro to generate the PUBLISH topic string to the
- * DescribePendingJobExecution API of AWS IoT Jobs service for requesting
+ * DescribeJobExecution API of AWS IoT Jobs service for requesting
  * the next pending job information.
  *
  * @param[in] thingName The name of the Thing resource to query for the
  * next pending job.
  */
-#define START_NEXT_JOB_TOPIC( thingName ) \
-    ( JOBS_API_PREFIX thingName JOBS_API_BRIDGE JOBS_API_STARTNEXT )
+#define DESCRIBE_NEXT_JOB_TOPIC( thingName ) \
+    ( JOBS_API_PREFIX thingName JOBS_API_BRIDGE JOBS_API_JOBID_NEXT "/" JOBS_API_GETPENDING )
 
 /**
  * @brief Utility macro to generate the subscription topic string for the
@@ -224,6 +225,11 @@
  */
 #define DELAY_BETWEEN_DEMO_RETRY_ITERATIONS_TICKS    ( pdMS_TO_TICKS( 5000U ) )
 
+/**
+ * @brief Length of the queue to pass Jobs messages to the job handling task.
+ */
+#define JOBS_MESSAGE_QUEUE_LEN                       ( 10U )
+
 /*-----------------------------------------------------------*/
 
 /**
@@ -239,8 +245,8 @@ typedef enum JobActionType
 
 /*-----------------------------------------------------------*/
 
-/** 
- * @brief Each compilation unit that consumes the NetworkContext must define it. 
+/**
+ * @brief Each compilation unit that consumes the NetworkContext must define it.
  * It should contain a single pointer to the type of your desired transport.
  * When using multiple transports in the same compilation unit, define this pointer as void *.
  *
@@ -271,14 +277,29 @@ static TlsTransportParams_t xTlsTransportParams;
 /**
  * @brief Static buffer used to hold MQTT messages being sent and received.
  */
-static uint8_t ucSharedBuffer[ democonfigNETWORK_BUFFER_SIZE ];
+static uint8_t usMqttConnectionBuffer[ democonfigNETWORK_BUFFER_SIZE ];
+
+/**
+ * @brief Static buffer used to hold the job ID of the single job that
+ * is executed at a time in the demo. This buffer allows re-use of the MQTT
+ * connection context for sending status updates of a job while it is being
+ * processed.
+ */
+static uint8_t usJobIdBuffer[ democonfigNETWORK_BUFFER_SIZE ];
+
+/**
+ * @brief Static buffer used to hold the job document of the single job that
+ * is executed at a time in the demo. This buffer allows re-use of the MQTT
+ * connection context for sending status updates of a job while it is being processed.
+ */
+static uint8_t usJobsDocumentBuffer[ democonfigNETWORK_BUFFER_SIZE ];
 
 /**
  * @brief Static buffer used to hold MQTT messages being sent and received.
  */
 static MQTTFixedBuffer_t xBuffer =
 {
-    .pBuffer = ucSharedBuffer,
+    .pBuffer = usMqttConnectionBuffer,
     .size    = democonfigNETWORK_BUFFER_SIZE
 };
 
@@ -295,6 +316,11 @@ static BaseType_t xExitActionJobReceived = pdFALSE;
  * @note When this flag is set, the demo terminates execution.
  */
 static BaseType_t xDemoEncounteredError = pdFALSE;
+
+/**
+ * @brief Queue used to pass incoming Jobs messages to a task to handle them.
+ */
+static QueueHandle_t xJobMessageQueue;
 
 /*-----------------------------------------------------------*/
 
@@ -325,12 +351,11 @@ static void prvEventCallback( MQTTContext_t * pxMqttContext,
                               MQTTDeserializedInfo_t * pxDeserializedInfo );
 
 /**
- * @brief Process payload from NextJobExecutionChanged and StartNextPendingJobExecution
+ * @brief Process payload from NextJobExecutionChanged and DescribeJobExecution
  * API MQTT topics of AWS IoT Jobs service.
  *
- * This handler parses the payload received about the next pending job to identify
- * the action requested in the job document, and perform the appropriate
- * action to execute the job.
+ * This handler parses the received payload about the next pending job, identifies
+ * the action requested in the job document, and executes the action.
  *
  * @param[in] pPublishInfo Deserialized publish info pointer for the incoming
  * packet.
@@ -354,14 +379,16 @@ static void prvSendUpdateForJob( char * pcJobId,
  * It parses the received job document, executes the job depending on the job "Action" type, and
  * sends an update to AWS for the Job.
  *
- * @param[in] pxPublishInfo The PUBLISH packet containing the job document received from the
- * AWS IoT Jobs service.
  * @param[in] pcJobId The ID of the job to execute.
  * @param[in] usJobIdLength The length of the job ID string.
+ * @param[in] pcJobDocument The JSON document associated with the @a pcJobID job
+ * that is to be processed.
+ * @param[in] usDocumentLength The length of the job document.
  */
-static void prvProcessJobDocument( MQTTPublishInfo_t * pxPublishInfo,
-                                   char * pcJobId,
-                                   uint16_t usJobIdLength );
+static void prvProcessJobDocument( char * pcJobId,
+                                   uint16_t usJobIdLength,
+                                   char * pcJobDocument,
+                                   uint16_t jobDocumentLength );
 
 /**
  * @brief The task used to demonstrate the Jobs library API.
@@ -369,7 +396,7 @@ static void prvProcessJobDocument( MQTTPublishInfo_t * pxPublishInfo,
  * @param[in] pvParameters Parameters as passed at the time of task creation.
  * Not used in this example.
  */
-static void prvJobsDemoTask( void * pvParameters );
+void prvJobsDemoTask( void * pvParameters );
 
 
 /*-----------------------------------------------------------*/
@@ -443,19 +470,22 @@ static void prvSendUpdateForJob( char * pcJobId,
     }
 }
 
-static void prvProcessJobDocument( MQTTPublishInfo_t * pxPublishInfo,
-                                   char * pcJobId,
-                                   uint16_t usJobIdLength )
+static void prvProcessJobDocument( char * pcJobId,
+                                   uint16_t usJobIdLength,
+                                   char * pcJobDocument,
+                                   uint16_t jobDocumentLength )
 {
     char * pcAction = NULL;
     size_t uActionLength = 0U;
     JSONStatus_t xJsonStatus = JSONSuccess;
 
-    configASSERT( pxPublishInfo != NULL );
-    configASSERT( ( pxPublishInfo->pPayload != NULL ) && ( pxPublishInfo->payloadLength > 0 ) );
+    configASSERT( pcJobId != NULL );
+    configASSERT( usJobIdLength > 0 );
+    configASSERT( pcJobDocument != NULL );
+    configASSERT( jobDocumentLength > 0 );
 
-    xJsonStatus = JSON_Search( ( char * ) pxPublishInfo->pPayload,
-                               pxPublishInfo->payloadLength,
+    xJsonStatus = JSON_Search( pcJobDocument,
+                               jobDocumentLength,
                                jobsexampleQUERY_KEY_FOR_ACTION,
                                jobsexampleQUERY_KEY_FOR_ACTION_LENGTH,
                                &pcAction,
@@ -485,8 +515,8 @@ static void prvProcessJobDocument( MQTTPublishInfo_t * pxPublishInfo,
             case JOB_ACTION_PRINT:
                 LogInfo( ( "Received job contains \"print\" action." ) );
 
-                xJsonStatus = JSON_Search( ( char * ) pxPublishInfo->pPayload,
-                                           pxPublishInfo->payloadLength,
+                xJsonStatus = JSON_Search( pcJobDocument,
+                                           jobDocumentLength,
                                            jobsexampleQUERY_KEY_FOR_MESSAGE,
                                            jobsexampleQUERY_KEY_FOR_MESSAGE_LENGTH,
                                            &pcMessage,
@@ -517,8 +547,8 @@ static void prvProcessJobDocument( MQTTPublishInfo_t * pxPublishInfo,
                 char * pcTopic = NULL;
                 size_t ulTopicLength = 0U;
 
-                xJsonStatus = JSON_Search( ( char * ) pxPublishInfo->pPayload,
-                                           pxPublishInfo->payloadLength,
+                xJsonStatus = JSON_Search( pcJobDocument,
+                                           jobDocumentLength,
                                            jobsexampleQUERY_KEY_FOR_TOPIC,
                                            jobsexampleQUERY_KEY_FOR_TOPIC_LENGTH,
                                            &pcTopic,
@@ -532,8 +562,8 @@ static void prvProcessJobDocument( MQTTPublishInfo_t * pxPublishInfo,
                 }
                 else
                 {
-                    xJsonStatus = JSON_Search( ( char * ) pxPublishInfo->pPayload,
-                                               pxPublishInfo->payloadLength,
+                    xJsonStatus = JSON_Search( pcJobDocument,
+                                               jobDocumentLength,
                                                jobsexampleQUERY_KEY_FOR_MESSAGE,
                                                jobsexampleQUERY_KEY_FOR_MESSAGE_LENGTH,
                                                &pcMessage,
@@ -590,7 +620,7 @@ static void prvNextJobHandler( MQTTPublishInfo_t * pxPublishInfo )
     else
     {
         char * pcJobId = NULL;
-        size_t ulJobIdLength = 0U;
+        size_t ulJobIdLength = 0UL;
 
         /* Parse the Job ID of the next pending job execution from the JSON payload. */
         if( JSON_Search( ( char * ) pxPublishInfo->pPayload,
@@ -607,12 +637,43 @@ static void prvNextJobHandler( MQTTPublishInfo_t * pxPublishInfo )
         }
         else
         {
+            char * pcJobDocLoc = NULL;
+            size_t ulJobDocLength = 0UL;
+
             configASSERT( ulJobIdLength < JOBS_JOBID_MAX_LENGTH );
             LogInfo( ( "Received a Job from AWS IoT Jobs service: JobId=%.*s",
                        ulJobIdLength, pcJobId ) );
 
-            /* Process the Job document and execute the job. */
-            prvProcessJobDocument( pxPublishInfo, pcJobId, ( uint16_t ) ulJobIdLength );
+            /* Copy the Job ID in the global buffer. This is done so that
+             * the MQTT context's network buffer can be used for sending jobs
+             * status updates to the AWS IoT Jobs service. */
+            memcpy( usJobIdBuffer, pcJobId, ulJobIdLength );
+
+            /* Search for the jobs document in the payload. */
+            if( JSON_Search( ( char * ) pxPublishInfo->pPayload,
+                             pxPublishInfo->payloadLength,
+                             jobsexampleQUERY_KEY_FOR_JOBS_DOC,
+                             jobsexampleQUERY_KEY_FOR_JOBS_DOC_LENGTH,
+                             &pcJobDocLoc,
+                             &ulJobDocLength ) != JSONSuccess )
+            {
+                LogWarn( ( "Failed to parse document of next job received from AWS IoT Jobs service: "
+                           "Topic=%.*s, JobID=%.*s",
+                           pxPublishInfo->topicNameLength, pxPublishInfo->pTopicName,
+                           ulJobIdLength, pcJobId ) );
+            }
+            else
+            {
+                /* Copy the Job document in buffer. This is done so that the MQTT connection buffer can
+                 * be used for sending jobs status updates to the AWS IoT Jobs service. */
+                memcpy( usJobsDocumentBuffer, pcJobDocLoc, ulJobDocLength );
+
+                /* Process the Job document and execute the job. */
+                prvProcessJobDocument( usJobIdBuffer,
+                                       ( uint16_t ) ulJobIdLength,
+                                       usJobsDocumentBuffer,
+                                       ulJobDocLength );
+            }
         }
     }
 }
@@ -663,10 +724,54 @@ static void prvEventCallback( MQTTContext_t * pxMqttContext,
         if( xStatus == JobsSuccess )
         {
             /* Upon successful return, the messageType has been filled in. */
-            if( ( topicType == JobsStartNextSuccess ) || ( topicType == JobsNextJobChanged ) )
+            if( ( topicType == JobsDescribeSuccess ) || ( topicType == JobsNextJobChanged ) )
             {
-                /* Handler function to process payload. */
-                prvNextJobHandler( pxDeserializedInfo->pPublishInfo );
+                MQTTPublishInfo_t * pxJobMessagePublishInfo = NULL;
+                char * pcTopicName = NULL;
+                char * pcPayload = NULL;
+
+                /* Copy message to pass into queue. */
+                pxJobMessagePublishInfo = ( MQTTPublishInfo_t * ) pvPortMalloc( sizeof( MQTTPublishInfo_t ) );
+                pcTopicName = ( char * ) pvPortMalloc( pxDeserializedInfo->pPublishInfo->topicNameLength );
+                pcPayload = ( char * ) pvPortMalloc( pxDeserializedInfo->pPublishInfo->payloadLength );
+
+                if( ( pxJobMessagePublishInfo == NULL ) || ( pcTopicName == NULL ) || ( pcPayload == NULL ) )
+                {
+                    LogError( ( "Malloc failed for copying job publish info." ) );
+
+                    if( pxJobMessagePublishInfo != NULL )
+                    {
+                        vPortFree( pxJobMessagePublishInfo );
+                    }
+
+                    if( pcTopicName != NULL )
+                    {
+                        vPortFree( pcTopicName );
+                    }
+
+                    if( pcPayload != NULL )
+                    {
+                        vPortFree( pcPayload );
+                    }
+                }
+                else
+                {
+                    memcpy( pxJobMessagePublishInfo, pxDeserializedInfo->pPublishInfo, sizeof( MQTTPublishInfo_t ) );
+                    memcpy( pcTopicName, pxDeserializedInfo->pPublishInfo->pTopicName, pxDeserializedInfo->pPublishInfo->topicNameLength );
+                    memcpy( pcPayload, pxDeserializedInfo->pPublishInfo->pPayload, pxDeserializedInfo->pPublishInfo->payloadLength );
+
+                    pxJobMessagePublishInfo->pTopicName = pcTopicName;
+                    pxJobMessagePublishInfo->pPayload = pcPayload;
+
+                    if( xQueueSend( xJobMessageQueue, &pxJobMessagePublishInfo, 0 ) == errQUEUE_FULL )
+                    {
+                        LogError( ( "Could not enqueue Jobs message." ) );
+
+                        vPortFree( pxJobMessagePublishInfo );
+                        vPortFree( pcTopicName );
+                        vPortFree( pcPayload );
+                    }
+                }
             }
             else if( topicType == JobsUpdateSuccess )
             {
@@ -718,25 +823,6 @@ static void prvEventCallback( MQTTContext_t * pxMqttContext,
 
 /*-----------------------------------------------------------*/
 
-/*
- * @brief Create the task that demonstrates the Jobs library API via a
- * MQTT mutually authenticated network connection with the AWS IoT broker.
- */
-void vStartJobsDemo( void )
-{
-    /* This example uses a single application task, which shows that how to
-    * use Jobs library to generate and validate AWS IoT Jobs service MQTT topics
-    * via coreMQTT library to communicate with the AWS IoT Jobs service. */
-    xTaskCreate( prvJobsDemoTask,          /* Function that implements the task. */
-                 "DemoTask",               /* Text name for the task - only used for debugging. */
-                 democonfigDEMO_STACKSIZE, /* Size of stack (in words, not bytes) to allocate for the task. */
-                 NULL,                     /* Task parameter - not used in this case. */
-                 tskIDLE_PRIORITY,         /* Task priority, must be between 0 and configMAX_PRIORITIES - 1. */
-                 NULL );                   /* Used to pass out a handle to the created task - not used in this case. */
-}
-
-/*-----------------------------------------------------------*/
-
 /**
  * @brief Entry point of the Jobs demo.
  *
@@ -748,10 +834,10 @@ void vStartJobsDemo( void )
  *
  * This function also shows that the communication with the AWS IoT Jobs services does
  * not require explicit subscriptions to the response MQTT topics for request commands that
- * sent to the MQTT APIs (like StartNextPendingJobExecution API) of the service. The service
+ * sent to the MQTT APIs (like DescribeJobExecution API) of the service. The service
  * will send messages on the response topics for the request commands on the same
  * MQTT connection irrespective of whether the client subscribes to the response topics.
- * Therefore, this demo processes incoming messages from response topics of StartNextPendingJobExecution
+ * Therefore, this demo processes incoming messages from response topics of DescribeJobExecution
  * and UpdateJobExecution APIs without explicitly subscribing to the topics.
  */
 void prvJobsDemoTask( void * pvParameters )
@@ -766,11 +852,27 @@ void prvJobsDemoTask( void * pvParameters )
     /* Set the pParams member of the network context with desired transport. */
     xNetworkContext.pParams = &xTlsTransportParams;
 
+    /* Initialize Jobs message queue. */
+    xJobMessageQueue = xQueueCreate( JOBS_MESSAGE_QUEUE_LEN, sizeof( MQTTPublishInfo_t * ) );
+    configASSERT( xJobMessageQueue != NULL );
+
     /* This demo runs a single loop unless there are failures in the demo execution.
      * In case of failures in the demo execution, demo loop will be retried for up to
      * JOBS_MAX_DEMO_LOOP_COUNT times. */
     do
     {
+        LogInfo( ( "---------STARTING DEMO---------\r\n" ) );
+
+        if( xPlatformIsNetworkUp() == pdFALSE )
+        {
+            LogInfo( ( "Waiting for the network link up event..." ) );
+
+            while( xPlatformIsNetworkUp() == pdFALSE )
+            {
+                vTaskDelay( pdMS_TO_TICKS( 1000U ) );
+            }
+        }
+
         /* Establish an MQTT connection with AWS IoT over a mutually authenticated TLS session. */
         xDemoStatus = xEstablishMqttSession( &xMqttContext,
                                              &xNetworkContext,
@@ -829,23 +931,23 @@ void prvJobsDemoTask( void * pvParameters )
 
         if( xDemoStatus == pdPASS )
         {
-            /* Publish to AWS IoT Jobs on the StartNextPendingJobExecution API to request the next pending job.
+            /* Publish to AWS IoT Jobs on the DescribeJobExecution API to request the next pending job.
              *
              * Note: It is not required to make MQTT subscriptions to the response topics of the
-             * StartNextPendingJobExecution API because the AWS IoT Jobs service sends responses for
+             * DescribeJobExecution API because the AWS IoT Jobs service sends responses for
              * the PUBLISH commands on the same MQTT connection irrespective of whether the client has subscribed
              * to the response topics or not.
              * This demo processes incoming messages from the response topics of the API in the prvEventCallback()
              * handler that is supplied to the coreMQTT library. */
             if( xPublishToTopic( &xMqttContext,
-                                 START_NEXT_JOB_TOPIC( democonfigTHING_NAME ),
-                                 sizeof( START_NEXT_JOB_TOPIC( democonfigTHING_NAME ) ) - 1,
+                                 DESCRIBE_NEXT_JOB_TOPIC( democonfigTHING_NAME ),
+                                 sizeof( DESCRIBE_NEXT_JOB_TOPIC( democonfigTHING_NAME ) ) - 1,
                                  NULL,
                                  0 ) != pdPASS )
             {
                 xDemoStatus = pdFAIL;
-                LogError( ( "Failed to publish to StartNextPendingJobExecution API of AWS IoT Jobs service: "
-                            "Topic=%s", START_NEXT_JOB_TOPIC( democonfigTHING_NAME ) ) );
+                LogError( ( "Failed to publish to DescribeJobExecution API of AWS IoT Jobs service: "
+                            "Topic=%s", DESCRIBE_NEXT_JOB_TOPIC( democonfigTHING_NAME ) ) );
             }
         }
 
@@ -854,11 +956,22 @@ void prvJobsDemoTask( void * pvParameters )
                ( xDemoEncounteredError == pdFALSE ) &&
                ( xDemoStatus == pdPASS ) )
         {
+            MQTTPublishInfo_t * pxJobMessagePublishInfo;
             MQTTStatus_t xMqttStatus = MQTTSuccess;
 
             /* Check if we have notification for the next pending job in the queue from the
              * NextJobExecutionChanged API of the AWS IoT Jobs service. */
-            xMqttStatus = MQTT_ProcessLoop( &xMqttContext, 300U );
+            xMqttStatus = MQTT_ProcessLoop( &xMqttContext );
+
+            /* Receive any incoming Jobs message. */
+            if( xQueueReceive( xJobMessageQueue, &pxJobMessagePublishInfo, 0 ) == pdTRUE )
+            {
+                /* Handler function to process Jobs message payload. */
+                prvNextJobHandler( pxJobMessagePublishInfo );
+                vPortFree( pxJobMessagePublishInfo->pTopicName );
+                vPortFree( pxJobMessagePublishInfo->pPayload );
+                vPortFree( pxJobMessagePublishInfo );
+            }
 
             if( xMqttStatus != MQTTSuccess )
             {
@@ -928,6 +1041,8 @@ void prvJobsDemoTask( void * pvParameters )
     {
         LogInfo( ( "Demo completed successfully." ) );
     }
+
+    LogInfo( ( "-------DEMO FINISHED-------\r\n" ) );
 
     /* Delete this demo task. */
     LogInfo( ( "Deleting Jobs Demo task." ) );

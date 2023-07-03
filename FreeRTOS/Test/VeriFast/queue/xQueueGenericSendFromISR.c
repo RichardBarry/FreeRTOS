@@ -1,6 +1,6 @@
 /*
- * FreeRTOS V202012.00
- * Copyright (C) Amazon.com, Inc. or its affiliates.  All Rights Reserved.
+ * FreeRTOS V202212.00
+ * Copyright (C) 2020 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -18,7 +18,13 @@
  * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
  * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ *
+ * https://www.FreeRTOS.org
+ * https://github.com/FreeRTOS
+ *
  */
+
+/* *INDENT-OFF* */
 
 #include "proof/queue.h"
 #include "proof/queuecontracts.h"
@@ -100,29 +106,24 @@ BaseType_t xQueueGenericSendFromISR( QueueHandle_t xQueue,
             {
                 /* VeriFast: we do not verify this configuration option */
                 #if ( configUSE_QUEUE_SETS == 1 )
+                {
+                    if( pxQueue->pxQueueSetContainer != NULL )
                     {
-                        if( pxQueue->pxQueueSetContainer != NULL )
+                        if( ( xCopyPosition == queueOVERWRITE ) && ( uxPreviousMessagesWaiting != ( UBaseType_t ) 0 ) )
                         {
-                            if( ( xCopyPosition == queueOVERWRITE ) && ( uxPreviousMessagesWaiting != ( UBaseType_t ) 0 ) )
+                            /* Do not notify the queue set as an existing item
+                             * was overwritten in the queue so the number of items
+                             * in the queue has not changed. */
+                            mtCOVERAGE_TEST_MARKER();
+                        }
+                        else if( prvNotifyQueueSetContainer( pxQueue ) != pdFALSE )
+                        {
+                            /* The queue is a member of a queue set, and posting
+                             * to the queue set caused a higher priority task to
+                             * unblock.  A context switch is required. */
+                            if( pxHigherPriorityTaskWoken != NULL )
                             {
-                                /* Do not notify the queue set as an existing item
-                                 * was overwritten in the queue so the number of items
-                                 * in the queue has not changed. */
-                                mtCOVERAGE_TEST_MARKER();
-                            }
-                            else if( prvNotifyQueueSetContainer( pxQueue ) != pdFALSE )
-                            {
-                                /* The queue is a member of a queue set, and posting
-                                 * to the queue set caused a higher priority task to
-                                 * unblock.  A context switch is required. */
-                                if( pxHigherPriorityTaskWoken != NULL )
-                                {
-                                    *pxHigherPriorityTaskWoken = pdTRUE;
-                                }
-                                else
-                                {
-                                    mtCOVERAGE_TEST_MARKER();
-                                }
+                                *pxHigherPriorityTaskWoken = pdTRUE;
                             }
                             else
                             {
@@ -131,40 +132,17 @@ BaseType_t xQueueGenericSendFromISR( QueueHandle_t xQueue,
                         }
                         else
                         {
-                            if( listLIST_IS_EMPTY( &( pxQueue->xTasksWaitingToReceive ) ) == pdFALSE )
-                            {
-                                if( xTaskRemoveFromEventList( &( pxQueue->xTasksWaitingToReceive ) ) != pdFALSE )
-                                {
-                                    /* The task waiting has a higher priority so
-                                     *  record that a context switch is required. */
-                                    if( pxHigherPriorityTaskWoken != NULL )
-                                    {
-                                        *pxHigherPriorityTaskWoken = pdTRUE;
-                                    }
-                                    else
-                                    {
-                                        mtCOVERAGE_TEST_MARKER();
-                                    }
-                                }
-                                else
-                                {
-                                    mtCOVERAGE_TEST_MARKER();
-                                }
-                            }
-                            else
-                            {
-                                mtCOVERAGE_TEST_MARKER();
-                            }
+                            mtCOVERAGE_TEST_MARKER();
                         }
                     }
-                #else /* configUSE_QUEUE_SETS */
+                    else
                     {
                         if( listLIST_IS_EMPTY( &( pxQueue->xTasksWaitingToReceive ) ) == pdFALSE )
                         {
                             if( xTaskRemoveFromEventList( &( pxQueue->xTasksWaitingToReceive ) ) != pdFALSE )
                             {
-                                /* The task waiting has a higher priority so record that a
-                                 * context switch is required. */
+                                /* The task waiting has a higher priority so
+                                 *  record that a context switch is required. */
                                 if( pxHigherPriorityTaskWoken != NULL )
                                 {
                                     *pxHigherPriorityTaskWoken = pdTRUE;
@@ -183,12 +161,40 @@ BaseType_t xQueueGenericSendFromISR( QueueHandle_t xQueue,
                         {
                             mtCOVERAGE_TEST_MARKER();
                         }
-
-                        /* Not used in this path. */
-#ifndef VERIFAST /*< void cast of unused var */
-                        ( void ) uxPreviousMessagesWaiting;
-#endif
                     }
+                }
+                #else /* configUSE_QUEUE_SETS */
+                {
+                    if( listLIST_IS_EMPTY( &( pxQueue->xTasksWaitingToReceive ) ) == pdFALSE )
+                    {
+                        if( xTaskRemoveFromEventList( &( pxQueue->xTasksWaitingToReceive ) ) != pdFALSE )
+                        {
+                            /* The task waiting has a higher priority so record that a
+                             * context switch is required. */
+                            if( pxHigherPriorityTaskWoken != NULL )
+                            {
+                                *pxHigherPriorityTaskWoken = pdTRUE;
+                            }
+                            else
+                            {
+                                mtCOVERAGE_TEST_MARKER();
+                            }
+                        }
+                        else
+                        {
+                            mtCOVERAGE_TEST_MARKER();
+                        }
+                    }
+                    else
+                    {
+                        mtCOVERAGE_TEST_MARKER();
+                    }
+
+                    /* Not used in this path. */
+#ifndef VERIFAST /*< void cast of unused var */
+                    ( void ) uxPreviousMessagesWaiting;
+#endif
+                }
                 #endif /* configUSE_QUEUE_SETS */
             }
             else
@@ -233,3 +239,5 @@ BaseType_t xQueueGenericSendFromISR( QueueHandle_t xQueue,
 
     return xReturn;
 }
+
+/* *INDENT-ON* */

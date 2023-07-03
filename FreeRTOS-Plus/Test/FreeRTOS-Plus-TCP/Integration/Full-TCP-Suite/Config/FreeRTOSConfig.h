@@ -1,6 +1,6 @@
 /*
- * FreeRTOS V202012.00
- * Copyright (C) 2017 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
+ * FreeRTOS V202212.00
+ * Copyright (C) 2020 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -19,10 +19,10 @@
  * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
- * http://aws.amazon.com/freertos
- * http://www.FreeRTOS.org
+ * https://www.FreeRTOS.org
+ * https://github.com/FreeRTOS
+ *
  */
-
 #ifndef FREERTOS_CONFIG_H
 #define FREERTOS_CONFIG_H
 
@@ -36,7 +36,7 @@
  *
  * THESE PARAMETERS ARE DESCRIBED WITHIN THE 'CONFIGURATION' SECTION OF THE
  * FreeRTOS API DOCUMENTATION AVAILABLE ON THE FreeRTOS.org WEB SITE.
- * http://www.freertos.org/a00110.html
+ * https://www.FreeRTOS.org/a00110.html
  *
  * The bottom of this file contains some constants specific to running the UDP
  * stack in this demo.  Constants specific to FreeRTOS+TCP itself (rather than
@@ -53,7 +53,6 @@
 #define configUSE_TRACE_FACILITY                   1
 #define configUSE_16_BIT_TICKS                     0
 #define configIDLE_SHOULD_YIELD                    1
-#define configUSE_CO_ROUTINES                      0
 #define configUSE_MUTEXES                          1
 #define configUSE_RECURSIVE_MUTEXES                1
 #define configQUEUE_REGISTRY_SIZE                  0
@@ -84,10 +83,6 @@ void vConfigureTimerForRunTimeStats(void);
 #define configGENERATE_RUN_TIME_STATS    1
 #define portCONFIGURE_TIMER_FOR_RUN_TIME_STATS()    vConfigureTimerForRunTimeStats()
 #define portGET_RUN_TIME_COUNTER_VALUE()            ulGetRunTimeCounterValue()
-
-/* Co-routine definitions. */
-#define configUSE_CO_ROUTINES                   0
-#define configMAX_CO_ROUTINE_PRIORITIES         ( 2 )
 
 /* Currently the TCP/IP stack is using dynamic allocation, and the MQTT task is
  * using static allocation. */
@@ -175,8 +170,8 @@ extern void vLoggingPrint(const char* pcMessage);
 
     /* The address of an echo server that will be used by the two demo echo client
      * tasks:
-     * http://www.freertos.org/FreeRTOS-Plus/FreeRTOS_Plus_TCP/TCP_Echo_Clients.html,
-     * http://www.freertos.org/FreeRTOS-Plus/FreeRTOS_Plus_TCP/UDP_Echo_Clients.html. */
+     * https://www.FreeRTOS.org/FreeRTOS-Plus/FreeRTOS_Plus_TCP/TCP_Echo_Clients.html,
+     * https://www.FreeRTOS.org/FreeRTOS-Plus/FreeRTOS_Plus_TCP/UDP_Echo_Clients.html. */
 #define configECHO_SERVER_ADDR0              192
 #define configECHO_SERVER_ADDR1              168
 #define configECHO_SERVER_ADDR2              2
@@ -229,7 +224,7 @@ extern void vLoggingPrint(const char* pcMessage);
 
 #define configPROFILING                      ( 0 )
 
-/* Pseudo random number generater used by some demo tasks. */
+/* Pseudo random number generator used by some demo tasks. */
 extern uint32_t ulRand();
 #define configRAND32()    ulRand()
 

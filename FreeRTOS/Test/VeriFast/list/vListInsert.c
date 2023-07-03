@@ -1,6 +1,6 @@
 /*
- * FreeRTOS V202012.00
- * Copyright (C) Amazon.com, Inc. or its affiliates.  All Rights Reserved.
+ * FreeRTOS V202212.00
+ * Copyright (C) 2020 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -18,7 +18,13 @@
  * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
  * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ *
+ * https://www.FreeRTOS.org
+ * https://github.com/FreeRTOS
+ *
  */
+
+/* *INDENT-OFF* */
 
 #include "proof/list.h"
 
@@ -102,6 +108,9 @@ void vListInsert( List_t * const pxList,
         *   4) Using a queue or semaphore before it has been initialised or
         *      before the scheduler has been started (are interrupts firing
         *      before vTaskStartScheduler() has been called?).
+        *   5) If the FreeRTOS port supports interrupt nesting then ensure that
+        *      the priority of the tick interrupt is at or below
+        *      configMAX_SYSCALL_INTERRUPT_PRIORITY.
         **********************************************************************/
 
 #ifdef VERIFAST /*< ***over-approximate list insert loop*** */
@@ -314,3 +323,5 @@ void vListInsert( List_t * const pxList,
         }
     }@*/
 }
+
+/* *INDENT-ON* */

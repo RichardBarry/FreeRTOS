@@ -30,6 +30,15 @@
   "ENTRY": "TaskResumeAll",
   "DEF":
   [
+    { "default":
+      [
+        "FREERTOS_MODULE_TEST",
+        "PENDED_TICKS=1",
+        "'mtCOVERAGE_TEST_MARKER()=__CPROVER_assert(1, \"Coverage marker\")'",
+        "configUSE_TRACE_FACILITY=0",
+        "configGENERATE_RUN_TIME_STATS=0"
+      ]
+    },
     { "useTickHook1":
       [
         "FREERTOS_MODULE_TEST",
@@ -44,7 +53,7 @@
   "CBMCFLAGS":
   [
     "--unwind 1",
-    "--unwindset prvInitialiseTaskLists.0:8,xTaskResumeAll.0:2,vListInsert.0:5,xTaskIncrementTick.0:4"
+    "--unwindset prvInitialiseTaskLists.0:8,xTaskResumeAll.4:2,vListInsert.0:5,xTaskIncrementTick.5:4"
 
   ],
   "OBJS":

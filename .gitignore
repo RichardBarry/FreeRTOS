@@ -1,4 +1,4 @@
-# Ignore MacOS file system related.  
+# Ignore MacOS file system related.
 **/*.DS_Store*
 
 # Ignore build results
@@ -11,9 +11,48 @@
 [Ll]og/
 [Ll]ogs/
 
+# CodeWarrior temporary files
+*.tdt
+CWSettingsWindows.stg
+
+# Executable Files
+*.exe
+*.hex
+*.bin
+*.elf
+*.out
+*.rom
+
+# MS Word Files
+*.doc
+*.docx
+
 # Visual Studio cache/options directory
 .vs/
+
+# Visual Studio Solution / project User Option files
+*.suo
+*.vcxproj.user
 
 # Python Tools for Visual Studio (PTVS)
 __pycache__/
 *.pyc
+
+# Ignore certificate files.
+*.pem
+*.crt
+
+# Ignore Visual Studio user files
+*.suo
+*.vcxproj.user
+
+# Atmel Studio user files
+*.atsuo
+
+# Image Files
+*.png
+*.jpg
+*.jpeg
+
+# Renesas IDE temporary files
+*.nav

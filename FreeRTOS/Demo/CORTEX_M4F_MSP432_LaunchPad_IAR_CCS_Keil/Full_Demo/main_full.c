@@ -1,5 +1,5 @@
 /*
- * FreeRTOS V202012.00
+ * FreeRTOS V202212.00
  * Copyright (C) 2020 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -19,10 +19,9 @@
  * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
- * http://www.FreeRTOS.org
- * http://aws.amazon.com/freertos
+ * https://www.FreeRTOS.org
+ * https://github.com/FreeRTOS
  *
- * 1 tab == 4 spaces!
  */
 
 
@@ -55,7 +54,7 @@
  * deliberately written to be inefficient and should not be used as a template
  * for a production driver.  Type "help" to see a list of registered commands.
  * The FreeRTOS+CLI license is different to the FreeRTOS license, see
- * http://www.FreeRTOS.org/cli for license and usage details.
+ * https://www.FreeRTOS.org/cli for license and usage details.
  *
  * "Reg test" tasks - These fill both the core and floating point registers with
  * known values, then check that each register maintains its expected value for
@@ -176,7 +175,7 @@ extern void vUARTCommandConsoleStart( uint16_t usStackSize, UBaseType_t uxPriori
 void vFullDemoIdleHook( void );
 
 /*
- * The full demo configures the clocks for maximum frequency, wheras the blinky
+ * The full demo configures the clocks for maximum frequency, whereas the blinky
  * demo uses a slower clock as it also uses low power features.
  */
 static void prvConfigureClocks( void );
@@ -401,7 +400,7 @@ static void prvConfigureClocks( void )
 	FlashCtl_setWaitState( FLASH_BANK0, 2 );
 	FlashCtl_setWaitState( FLASH_BANK1, 2 );
 
-	/* The full demo configures the clocks for maximum frequency, wheras the
+	/* The full demo configures the clocks for maximum frequency, whereas the
 	blinky demo uses a slower clock as it also uses low power features.  Maximum
 	freqency also needs more voltage.
 

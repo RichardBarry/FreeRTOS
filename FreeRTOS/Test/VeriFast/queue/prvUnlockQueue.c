@@ -1,6 +1,6 @@
 /*
- * FreeRTOS V202012.00
- * Copyright (C) Amazon.com, Inc. or its affiliates.  All Rights Reserved.
+ * FreeRTOS V202212.00
+ * Copyright (C) 2020 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -18,7 +18,13 @@
  * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
  * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ *
+ * https://www.FreeRTOS.org
+ * https://github.com/FreeRTOS
+ *
  */
+
+/* *INDENT-OFF* */
 
 #include "proof/queue.h"
 #define taskENTER_CRITICAL()    setInterruptMask( pxQueue )
@@ -53,55 +59,32 @@ static void prvUnlockQueue( Queue_t * const pxQueue )
             /* Data was posted while the queue was locked.  Are any tasks
              * blocked waiting for data to become available? */
             #if ( configUSE_QUEUE_SETS == 1 )
+            {
+                if( pxQueue->pxQueueSetContainer != NULL )
                 {
-                    if( pxQueue->pxQueueSetContainer != NULL )
+                    if( prvNotifyQueueSetContainer( pxQueue ) != pdFALSE )
                     {
-                        if( prvNotifyQueueSetContainer( pxQueue ) != pdFALSE )
-                        {
-                            /* The queue is a member of a queue set, and posting to
-                             * the queue set caused a higher priority task to unblock.
-                             * A context switch is required. */
-                            vTaskMissedYield();
-                        }
-                        else
-                        {
-                            mtCOVERAGE_TEST_MARKER();
-                        }
+                        /* The queue is a member of a queue set, and posting to
+                         * the queue set caused a higher priority task to unblock.
+                         * A context switch is required. */
+                        vTaskMissedYield();
                     }
                     else
                     {
-                        /* Tasks that are removed from the event list will get
-                         * added to the pending ready list as the scheduler is still
-                         * suspended. */
-                        if( listLIST_IS_EMPTY( &( pxQueue->xTasksWaitingToReceive ) ) == pdFALSE )
-                        {
-                            if( xTaskRemoveFromEventList( &( pxQueue->xTasksWaitingToReceive ) ) != pdFALSE )
-                            {
-                                /* The task waiting has a higher priority so record that a
-                                 * context switch is required. */
-                                vTaskMissedYield();
-                            }
-                            else
-                            {
-                                mtCOVERAGE_TEST_MARKER();
-                            }
-                        }
-                        else
-                        {
-                            break;
-                        }
+                        mtCOVERAGE_TEST_MARKER();
                     }
                 }
-            #else /* configUSE_QUEUE_SETS */
+                else
                 {
-                    /* Tasks that are removed from the event list will get added to
-                     * the pending ready list as the scheduler is still suspended. */
+                    /* Tasks that are removed from the event list will get
+                     * added to the pending ready list as the scheduler is still
+                     * suspended. */
                     if( listLIST_IS_EMPTY( &( pxQueue->xTasksWaitingToReceive ) ) == pdFALSE )
                     {
                         if( xTaskRemoveFromEventList( &( pxQueue->xTasksWaitingToReceive ) ) != pdFALSE )
                         {
-                            /* The task waiting has a higher priority so record that
-                             * a context switch is required. */
+                            /* The task waiting has a higher priority so record that a
+                             * context switch is required. */
                             vTaskMissedYield();
                         }
                         else
@@ -114,6 +97,29 @@ static void prvUnlockQueue( Queue_t * const pxQueue )
                         break;
                     }
                 }
+            }
+            #else /* configUSE_QUEUE_SETS */
+            {
+                /* Tasks that are removed from the event list will get added to
+                 * the pending ready list as the scheduler is still suspended. */
+                if( listLIST_IS_EMPTY( &( pxQueue->xTasksWaitingToReceive ) ) == pdFALSE )
+                {
+                    if( xTaskRemoveFromEventList( &( pxQueue->xTasksWaitingToReceive ) ) != pdFALSE )
+                    {
+                        /* The task waiting has a higher priority so record that
+                         * a context switch is required. */
+                        vTaskMissedYield();
+                    }
+                    else
+                    {
+                        mtCOVERAGE_TEST_MARKER();
+                    }
+                }
+                else
+                {
+                    break;
+                }
+            }
             #endif /* configUSE_QUEUE_SETS */
 
             --cTxLock;
@@ -160,3 +166,5 @@ static void prvUnlockQueue( Queue_t * const pxQueue )
     mutex_release( pxQueue->locked );
 #endif
 }
+
+/* *INDENT-ON* */

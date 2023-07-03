@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016, Freescale Semiconductor, Inc.
- * Copyright 2016-2019 NXP
+ * Copyright 2016-2022NXP
  * All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
@@ -21,12 +21,24 @@
 
 /*! @name Driver version */
 /*@{*/
-/*! @brief USART driver version 2.1.1. */
-#define FSL_USART_DRIVER_VERSION (MAKE_VERSION(2, 1, 1))
+/*! @brief USART driver version. */
+#define FSL_USART_DRIVER_VERSION (MAKE_VERSION(2, 7, 0))
 /*@}*/
 
 #define USART_FIFOTRIG_TXLVL_GET(base) (((base)->FIFOTRIG & USART_FIFOTRIG_TXLVL_MASK) >> USART_FIFOTRIG_TXLVL_SHIFT)
 #define USART_FIFOTRIG_RXLVL_GET(base) (((base)->FIFOTRIG & USART_FIFOTRIG_RXLVL_MASK) >> USART_FIFOTRIG_RXLVL_SHIFT)
+
+/*! @brief Retry times for waiting flag.
+ *
+ * Defining to zero means to keep waiting for the flag until it is assert/deassert in blocking transfer,
+ * otherwise the program will wait until the UART_RETRY_TIMES counts down to 0,
+ * if the flag still remains unchanged then program will return kStatus_USART_Timeout.
+ * It is not advised to use this macro in formal application to prevent any hardware error
+ * because the actual wait period is affected by the compiler and optimization.
+ */
+#ifndef UART_RETRY_TIMES
+#define UART_RETRY_TIMES 0U
+#endif
 
 /*! @brief Error codes for the USART driver. */
 enum
@@ -43,6 +55,9 @@ enum
     kStatus_USART_ParityError         = MAKE_STATUS(kStatusGroup_LPC_USART, 12), /*!< USART parity error. */
     kStatus_USART_BaudrateNotSupport =
         MAKE_STATUS(kStatusGroup_LPC_USART, 13), /*!< Baudrate is not support in current clock source */
+#if UART_RETRY_TIMES
+    kStatus_USART_Timeout = MAKE_STATUS(kStatusGroup_LPC_USART, 14), /*!< USART time out. */
+#endif
 };
 
 /*! @brief USART synchronous mode. */
@@ -117,6 +132,28 @@ enum _usart_interrupt_enable
     kUSART_RxErrorInterruptEnable = (USART_FIFOINTENSET_RXERR_MASK),
     kUSART_TxLevelInterruptEnable = (USART_FIFOINTENSET_TXLVL_MASK),
     kUSART_RxLevelInterruptEnable = (USART_FIFOINTENSET_RXLVL_MASK),
+    kUSART_TxIdleInterruptEnable  = (USART_INTENSET_TXIDLEEN_MASK << 16U), /*!< Transmitter idle. */
+    kUSART_CtsChangeInterruptEnable =
+        (USART_INTENSET_DELTACTSEN_MASK << 16U), /*!< Change in the state of the CTS input. */
+    kUSART_RxBreakChangeInterruptEnable =
+        (USART_INTENSET_DELTARXBRKEN_MASK),                              /*!< Break condition asserted or deasserted. */
+    kUSART_RxStartInterruptEnable       = (USART_INTENSET_STARTEN_MASK), /*!< Rx start bit detected. */
+    kUSART_FramingErrorInterruptEnable  = (USART_INTENSET_FRAMERREN_MASK),   /*!< Framing error detected. */
+    kUSART_ParityErrorInterruptEnable   = (USART_INTENSET_PARITYERREN_MASK), /*!< Parity error detected. */
+    kUSART_NoiseErrorInterruptEnable    = (USART_INTENSET_RXNOISEEN_MASK),   /*!< Noise error detected. */
+    kUSART_AutoBaudErrorInterruptEnable = (USART_INTENSET_ABERREN_MASK),     /*!< Auto baudrate error detected. */
+#if defined(FSL_FEATURE_USART_HAS_FIFORXTIMEOUTCFG) && FSL_FEATURE_USART_HAS_FIFORXTIMEOUTCFG
+    kUSART_RxTimeoutInterruptEnable = (USART_FIFOINTENSET_RXTIMEOUT_MASK), /*!< Receive timeout detected. */
+#endif
+    kUSART_AllInterruptEnables =
+        kUSART_TxErrorInterruptEnable | kUSART_RxErrorInterruptEnable | kUSART_TxLevelInterruptEnable |
+        kUSART_RxLevelInterruptEnable | kUSART_TxIdleInterruptEnable | kUSART_CtsChangeInterruptEnable |
+        kUSART_RxBreakChangeInterruptEnable | kUSART_RxStartInterruptEnable | kUSART_FramingErrorInterruptEnable |
+        kUSART_ParityErrorInterruptEnable | kUSART_NoiseErrorInterruptEnable |
+#if defined(FSL_FEATURE_USART_HAS_FIFORXTIMEOUTCFG) && FSL_FEATURE_USART_HAS_FIFORXTIMEOUTCFG
+        kUSART_RxTimeoutInterruptEnable |
+#endif
+        kUSART_AutoBaudErrorInterruptEnable,
 };
 
 /*!
@@ -126,13 +163,48 @@ enum _usart_interrupt_enable
  */
 enum _usart_flags
 {
-    kUSART_TxError            = (USART_FIFOSTAT_TXERR_MASK),      /*!< TEERR bit, sets if TX buffer is error */
-    kUSART_RxError            = (USART_FIFOSTAT_RXERR_MASK),      /*!< RXERR bit, sets if RX buffer is error */
-    kUSART_TxFifoEmptyFlag    = (USART_FIFOSTAT_TXEMPTY_MASK),    /*!< TXEMPTY bit, sets if TX buffer is empty */
-    kUSART_TxFifoNotFullFlag  = (USART_FIFOSTAT_TXNOTFULL_MASK),  /*!< TXNOTFULL bit, sets if TX buffer is not full */
-    kUSART_RxFifoNotEmptyFlag = (USART_FIFOSTAT_RXNOTEMPTY_MASK), /*!< RXNOEMPTY bit, sets if RX buffer is not empty */
-    kUSART_RxFifoFullFlag     = (USART_FIFOSTAT_RXFULL_MASK),     /*!< RXFULL bit, sets if RX buffer is full */
+    kUSART_TxError            = (USART_FIFOSTAT_TXERR_MASK),       /*!< TEERR bit, sets if TX buffer is error */
+    kUSART_RxError            = (USART_FIFOSTAT_RXERR_MASK),       /*!< RXERR bit, sets if RX buffer is error */
+    kUSART_TxFifoEmptyFlag    = (USART_FIFOSTAT_TXEMPTY_MASK),     /*!< TXEMPTY bit, sets if TX buffer is empty */
+    kUSART_TxFifoNotFullFlag  = (USART_FIFOSTAT_TXNOTFULL_MASK),   /*!< TXNOTFULL bit, sets if TX buffer is not full */
+    kUSART_RxFifoNotEmptyFlag = (USART_FIFOSTAT_RXNOTEMPTY_MASK),  /*!< RXNOEMPTY bit, sets if RX buffer is not empty */
+    kUSART_RxFifoFullFlag     = (USART_FIFOSTAT_RXFULL_MASK),      /*!< RXFULL bit, sets if RX buffer is full */
+    kUSART_RxIdleFlag         = (USART_STAT_RXIDLE_MASK << 16U),   /*!< Receiver idle. */
+    kUSART_TxIdleFlag         = (USART_STAT_TXIDLE_MASK << 16U),   /*!< Transmitter idle. */
+    kUSART_CtsAssertFlag      = (USART_STAT_CTS_MASK << 16U),      /*!< CTS signal high. */
+    kUSART_CtsChangeFlag      = (USART_STAT_DELTACTS_MASK << 16U), /*!< CTS signal changed interrupt status. */
+    kUSART_BreakDetectFlag = (USART_STAT_RXBRK_MASK), /*!< Break detected. Self cleared when rx pin goes high again. */
+    kUSART_BreakDetectChangeFlag = (USART_STAT_DELTARXBRK_MASK), /*!< Break detect change interrupt flag. A change in
+                                                                    the state of receiver break detection. */
+    kUSART_RxStartFlag       = (USART_STAT_START_MASK),          /*!< Rx start bit detected interrupt flag. */
+    kUSART_FramingErrorFlag  = (USART_STAT_FRAMERRINT_MASK),     /*!< Framing error interrupt flag. */
+    kUSART_ParityErrorFlag   = (USART_STAT_PARITYERRINT_MASK),   /*!< parity error interrupt flag. */
+    kUSART_NoiseErrorFlag    = (USART_STAT_RXNOISEINT_MASK),     /*!< Noise error interrupt flag. */
+    kUSART_AutobaudErrorFlag = (USART_STAT_ABERR_MASK), /*!< Auto baudrate error interrupt flag, caused by the baudrate
+                                                           counter timeout before the end of start bit. */
+#if defined(FSL_FEATURE_USART_HAS_FIFORXTIMEOUTCFG) && FSL_FEATURE_USART_HAS_FIFORXTIMEOUTCFG
+    kUSART_RxTimeoutFlag = (USART_FIFOSTAT_RXTIMEOUT_MASK), /*!< RXTIMEOUT bit, sets if RX FIFO Timeout. */
+#endif
+    kUSART_AllClearFlags = kUSART_TxError | kUSART_RxError | kUSART_CtsChangeFlag | kUSART_BreakDetectChangeFlag |
+                           kUSART_RxStartFlag | kUSART_FramingErrorFlag | kUSART_ParityErrorFlag |
+#if defined(FSL_FEATURE_USART_HAS_FIFORXTIMEOUTCFG) && FSL_FEATURE_USART_HAS_FIFORXTIMEOUTCFG
+                           kUSART_RxTimeoutFlag |
+#endif
+                           kUSART_NoiseErrorFlag | kUSART_AutobaudErrorFlag,
 };
+
+#if defined(FSL_FEATURE_USART_HAS_FIFORXTIMEOUTCFG) && FSL_FEATURE_USART_HAS_FIFORXTIMEOUTCFG
+/*! @brief USART receive timeout configuration structure. */
+typedef struct _usart_rx_timeout_config
+{
+    bool enable;                /*!< Enable RX timeout */
+    bool resetCounterOnEmpty;   /*!< Enable RX timeout counter reset when RX FIFO becames empty. */
+    bool resetCounterOnReceive; /*!< Enable RX timeout counter reset when RX FIFO receives data from the transmitter
+                                   side. */
+    uint32_t counter;           /*!< RX timeout counter*/
+    uint8_t prescaler;          /*!< RX timeout prescaler*/
+} usart_rx_timeout_config;
+#endif
 
 /*! @brief USART configuration structure. */
 typedef struct _usart_config
@@ -145,16 +217,30 @@ typedef struct _usart_config
     bool enableRx;                        /*!< Enable RX */
     bool enableTx;                        /*!< Enable TX */
     bool enableContinuousSCLK;            /*!< USART continuous Clock generation enable in synchronous master mode. */
+    bool enableMode32k;                   /*!< USART uses 32 kHz clock from the RTC oscillator as the clock source. */
+    bool enableHardwareFlowControl;       /*!< Enable hardware control RTS/CTS */
     usart_txfifo_watermark_t txWatermark; /*!< txFIFO watermark */
     usart_rxfifo_watermark_t rxWatermark; /*!< rxFIFO watermark */
     usart_sync_mode_t syncMode; /*!< Transfer mode select - asynchronous, synchronous master, synchronous slave. */
     usart_clock_polarity_t clockPolarity; /*!< Selects the clock polarity and sampling edge in synchronous mode. */
+#if defined(FSL_FEATURE_USART_HAS_FIFORXTIMEOUTCFG) && FSL_FEATURE_USART_HAS_FIFORXTIMEOUTCFG
+    usart_rx_timeout_config rxTimeout; /*!< rx timeout configuration */
+#endif
 } usart_config_t;
 
 /*! @brief USART transfer structure. */
 typedef struct _usart_transfer
 {
-    uint8_t *data;   /*!< The buffer of data to be transfer.*/
+    /*
+     * Use separate TX and RX data pointer, because TX data is const data.
+     * The member data is kept for backward compatibility.
+     */
+    union
+    {
+        uint8_t *data;         /*!< The buffer of data to be transfer.*/
+        uint8_t *rxData;       /*!< The buffer to receive data. */
+        const uint8_t *txData; /*!< The buffer of data to be sent. */
+    };
     size_t dataSize; /*!< The byte count to be transfer. */
 } usart_transfer_t;
 
@@ -167,12 +253,12 @@ typedef void (*usart_transfer_callback_t)(USART_Type *base, usart_handle_t *hand
 /*! @brief USART handle structure. */
 struct _usart_handle
 {
-    uint8_t *volatile txData;   /*!< Address of remaining data to send. */
-    volatile size_t txDataSize; /*!< Size of the remaining data to send. */
-    size_t txDataSizeAll;       /*!< Size of the data to send out. */
-    uint8_t *volatile rxData;   /*!< Address of remaining data to receive. */
-    volatile size_t rxDataSize; /*!< Size of the remaining data to receive. */
-    size_t rxDataSizeAll;       /*!< Size of the data to receive. */
+    const uint8_t *volatile txData; /*!< Address of remaining data to send. */
+    volatile size_t txDataSize;     /*!< Size of the remaining data to send. */
+    size_t txDataSizeAll;           /*!< Size of the data to send out. */
+    uint8_t *volatile rxData;       /*!< Address of remaining data to receive. */
+    volatile size_t rxDataSize;     /*!< Size of the remaining data to receive. */
+    size_t rxDataSizeAll;           /*!< Size of the data to receive. */
 
     uint8_t *rxRingBuffer;              /*!< Start address of the receiver ring buffer. */
     size_t rxRingBufferSize;            /*!< Size of the ring buffer. */
@@ -230,7 +316,41 @@ uint32_t USART_GetInstance(USART_Type *base);
  * @retval kStatus_Success Status USART initialize succeed
  */
 status_t USART_Init(USART_Type *base, const usart_config_t *config, uint32_t srcClock_Hz);
-
+#if defined(FSL_FEATURE_USART_HAS_FIFORXTIMEOUTCFG) && FSL_FEATURE_USART_HAS_FIFORXTIMEOUTCFG
+/*!
+ * @brief Calculate the USART instance RX timeout prescaler and counter.
+ *
+ * This function for calculate the USART RXFIFO timeout config. This function is used to calculate
+ * suitable prescaler and counter for target_us.
+ * @code
+ *   usart_config_t config;
+ *   config.rxWatermark                     = kUSART_RxFifo2;
+ *   config.rxTimeout.enable                = true;
+ *   config.rxTimeout.resetCounterOnEmpty   = true;
+ *   config.rxTimeout.resetCounterOnReceive = true;
+ *   USART_CalcTimeoutConfig(200U, &config.rxTimeout.prescaler, &config.rxTimeout.counter,
+ *                                    CLOCK_GetFreq(kCLOCK_BusClk));
+ * @endcode
+ * @param target_us  Time for rx timeout unit us.
+ * @param rxTimeoutPrescaler The prescaler to be setted after function.
+ * @param rxTimeoutcounter The counter to be setted after function.
+ * @param srcClock_Hz The clockSrc for rx timeout.
+ */
+void USART_CalcTimeoutConfig(uint32_t target_us,
+                             uint8_t *rxTimeoutPrescaler,
+                             uint32_t *rxTimeoutcounter,
+                             uint32_t srcClock_Hz);
+/*!
+ * @brief Sets the USART instance RX timeout config.
+ *
+ * This function configures the USART RXFIFO timeout config. This function is used to config
+ * the USART RXFIFO timeout config after the USART module is initialized by the USART_Init.
+ *
+ * @param base USART peripheral base address.
+ * @param config pointer to receive timeout configuration structure.
+ */
+void USART_SetRxTimeoutConfig(USART_Type *base, usart_rx_timeout_config *config);
+#endif
 /*!
  * @brief Deinitializes a USART instance.
  *
@@ -275,6 +395,77 @@ void USART_GetDefaultConfig(usart_config_t *config);
  */
 status_t USART_SetBaudRate(USART_Type *base, uint32_t baudrate_Bps, uint32_t srcClock_Hz);
 
+/*!
+ * @brief Enable 32 kHz mode which USART uses clock from the RTC oscillator as the clock source
+ *
+ * Please note that in order to use a 32 kHz clock to operate USART properly, the RTC oscillator
+ * and its 32 kHz output must be manully enabled by user, by calling RTC_Init and setting
+ * SYSCON_RTCOSCCTRL_EN bit to 1.
+ * And in 32kHz clocking mode the USART can only work at 9600 baudrate or at the baudrate that
+ * 9600 can evenly divide, eg: 4800, 3200.
+ *
+ * @param base USART peripheral base address.
+ * @param baudRate_Bps USART baudrate to be set..
+ * @param enableMode32k true is 32k mode, false is normal mode.
+ * @param srcClock_Hz USART clock source frequency in HZ.
+ * @retval kStatus_USART_BaudrateNotSupport Baudrate is not support in current clock source.
+ * @retval kStatus_Success Set baudrate succeed.
+ * @retval kStatus_InvalidArgument One or more arguments are invalid.
+ */
+status_t USART_Enable32kMode(USART_Type *base, uint32_t baudRate_Bps, bool enableMode32k, uint32_t srcClock_Hz);
+
+/*!
+ * @brief Enable 9-bit data mode for USART.
+ *
+ * This function set the 9-bit mode for USART module. The 9th bit is not used for parity thus can be modified by user.
+ *
+ * @param base USART peripheral base address.
+ * @param enable true to enable, false to disable.
+ */
+void USART_Enable9bitMode(USART_Type *base, bool enable);
+
+/*!
+ * @brief Set the USART slave address.
+ *
+ * This function configures the address for USART module that works as slave in 9-bit data mode. When the address
+ * detection is enabled, the frame it receices with MSB being 1 is considered as an address frame, otherwise it is
+ * considered as data frame. Once the address frame matches slave's own addresses, this slave is addressed. This
+ * address frame and its following data frames are stored in the receive buffer, otherwise the frames will be discarded.
+ * To un-address a slave, just send an address frame with unmatched address.
+ *
+ * @note Any USART instance joined in the multi-slave system can work as slave. The position of the address mark is the
+ * same as the parity bit when parity is enabled for 8 bit and 9 bit data formats.
+ *
+ * @param base USART peripheral base address.
+ * @param address USART slave address.
+ */
+static inline void USART_SetMatchAddress(USART_Type *base, uint8_t address)
+{
+    /* Configure match address. */
+    base->ADDR = (uint32_t)address;
+}
+
+/*!
+ * @brief Enable the USART match address feature.
+ *
+ * @param base USART peripheral base address.
+ * @param match true to enable match address, false to disable.
+ */
+static inline void USART_EnableMatchAddress(USART_Type *base, bool match)
+{
+    /* Configure match address enable bit. */
+    if (match)
+    {
+        base->CFG |= (uint32_t)USART_CFG_AUTOADDR_MASK;
+        base->CTL |= (uint32_t)USART_CTL_ADDRDET_MASK;
+    }
+    else
+    {
+        base->CFG &= ~(uint32_t)USART_CFG_AUTOADDR_MASK;
+        base->CTL &= ~(uint32_t)USART_CTL_ADDRDET_MASK;
+    }
+}
+
 /* @} */
 
 /*!
@@ -301,7 +492,7 @@ status_t USART_SetBaudRate(USART_Type *base, uint32_t baudrate_Bps, uint32_t src
  */
 static inline uint32_t USART_GetStatusFlags(USART_Type *base)
 {
-    return base->FIFOSTAT;
+    return (base->FIFOSTAT & 0xFF0000FFUL) | (base->STAT & 0xFFUL) << 16U | (base->STAT & 0xFFFF00UL);
 }
 
 /*!
@@ -321,6 +512,9 @@ static inline uint32_t USART_GetStatusFlags(USART_Type *base)
  */
 static inline void USART_ClearStatusFlags(USART_Type *base, uint32_t mask)
 {
+    mask &= (uint32_t)kUSART_AllClearFlags;
+    /* Clear the clearable status in STAT register. */
+    base->STAT = (mask & 0xFFFF00UL) | ((mask & 0xFF0000UL) >> 16U);
     /* Only TXERR, RXERR fields support write. Remaining fields should be set to zero */
     base->FIFOSTAT = mask & (USART_FIFOSTAT_TXERR_MASK | USART_FIFOSTAT_RXERR_MASK);
 }
@@ -331,7 +525,6 @@ static inline void USART_ClearStatusFlags(USART_Type *base, uint32_t mask)
  * @name Interrupts
  * @{
  */
-
 /*!
  * @brief Enables USART interrupts according to the provided mask.
  *
@@ -347,7 +540,9 @@ static inline void USART_ClearStatusFlags(USART_Type *base, uint32_t mask)
  */
 static inline void USART_EnableInterrupts(USART_Type *base, uint32_t mask)
 {
-    base->FIFOINTENSET = mask & 0xFUL;
+    mask &= (uint32_t)kUSART_AllInterruptEnables;
+    base->INTENSET     = (mask & 0x1FF00UL) | ((mask & 0xFF0000UL) >> 16U);
+    base->FIFOINTENSET = mask & 0xF00000FUL;
 }
 
 /*!
@@ -365,6 +560,8 @@ static inline void USART_EnableInterrupts(USART_Type *base, uint32_t mask)
  */
 static inline void USART_DisableInterrupts(USART_Type *base, uint32_t mask)
 {
+    mask &= (uint32_t)kUSART_AllInterruptEnables;
+    base->INTENCLR     = (mask & 0x1FF00UL) | ((mask & 0xFF0000UL) >> 16U);
     base->FIFOINTENCLR = mask & 0xFUL;
 }
 
@@ -377,7 +574,7 @@ static inline void USART_DisableInterrupts(USART_Type *base, uint32_t mask)
  */
 static inline uint32_t USART_GetEnabledInterrupts(USART_Type *base)
 {
-    return base->FIFOINTENSET;
+    return (base->INTENSET & 0x1FF00UL) | ((base->INTENSET & 0xFFUL) << 16UL) | (base->FIFOINTENSET & 0xFUL);
 }
 
 /*!
@@ -469,6 +666,30 @@ static inline void USART_EnableAutoClearSCLK(USART_Type *base, bool enable)
         base->CTL &= ~USART_CTL_CLRCCONRX_MASK;
     }
 }
+
+/*!
+ * @brief Sets the rx FIFO watermark.
+ *
+ * @param base USART peripheral base address.
+ * @param water Rx FIFO watermark.
+ */
+static inline void USART_SetRxFifoWatermark(USART_Type *base, uint8_t water)
+{
+    assert(water <= (USART_FIFOTRIG_RXLVL_MASK >> USART_FIFOTRIG_RXLVL_SHIFT));
+    base->FIFOTRIG = (base->FIFOTRIG & ~USART_FIFOTRIG_RXLVL_MASK) | USART_FIFOTRIG_RXLVL(water);
+}
+
+/*!
+ * @brief Sets the tx FIFO watermark.
+ *
+ * @param base USART peripheral base address.
+ * @param water Tx FIFO watermark.
+ */
+static inline void USART_SetTxFifoWatermark(USART_Type *base, uint8_t water)
+{
+    assert(water <= (USART_FIFOTRIG_TXLVL_MASK >> USART_FIFOTRIG_TXLVL_SHIFT));
+    base->FIFOTRIG = (base->FIFOTRIG & ~USART_FIFOTRIG_TXLVL_MASK) | USART_FIFOTRIG_TXLVL(water);
+}
 /* @} */
 
 /*!
@@ -505,6 +726,36 @@ static inline uint8_t USART_ReadByte(USART_Type *base)
 }
 
 /*!
+ * @brief Gets the rx FIFO data count.
+ *
+ * @param base USART peripheral base address.
+ * @return rx FIFO data count.
+ */
+static inline uint8_t USART_GetRxFifoCount(USART_Type *base)
+{
+    return (uint8_t)((base->FIFOSTAT & USART_FIFOSTAT_RXLVL_MASK) >> USART_FIFOSTAT_RXLVL_SHIFT);
+}
+
+/*!
+ * @brief Gets the tx FIFO data count.
+ *
+ * @param base USART peripheral base address.
+ * @return tx FIFO data count.
+ */
+static inline uint8_t USART_GetTxFifoCount(USART_Type *base)
+{
+    return (uint8_t)((base->FIFOSTAT & USART_FIFOSTAT_TXLVL_MASK) >> USART_FIFOSTAT_TXLVL_SHIFT);
+}
+
+/*!
+ * @brief Transmit an address frame in 9-bit data mode.
+ *
+ * @param base USART peripheral base address.
+ * @param address USART slave address.
+ */
+void USART_SendAddress(USART_Type *base, uint8_t address);
+
+/*!
  * @brief Writes to the TX register using a blocking method.
  *
  * This function polls the TX register, waits for the TX register to be empty or for the TX FIFO
@@ -513,8 +764,11 @@ static inline uint8_t USART_ReadByte(USART_Type *base)
  * @param base USART peripheral base address.
  * @param data Start address of the data to write.
  * @param length Size of the data to write.
+ * @retval kStatus_USART_Timeout Transmission timed out and was aborted.
+ * @retval kStatus_InvalidArgument Invalid argument.
+ * @retval kStatus_Success Successfully wrote all data.
  */
-void USART_WriteBlocking(USART_Type *base, const uint8_t *data, size_t length);
+status_t USART_WriteBlocking(USART_Type *base, const uint8_t *data, size_t length);
 
 /*!
  * @brief Read RX data register using a blocking method.
@@ -529,6 +783,7 @@ void USART_WriteBlocking(USART_Type *base, const uint8_t *data, size_t length);
  * @retval kStatus_USART_ParityError Noise error happened while receiving data.
  * @retval kStatus_USART_NoiseError Framing error happened while receiving data.
  * @retval kStatus_USART_RxError Overflow or underflow rxFIFO happened.
+ * @retval kStatus_USART_Timeout Transmission timed out and was aborted.
  * @retval kStatus_Success Successfully received all data.
  */
 status_t USART_ReadBlocking(USART_Type *base, uint8_t *data, size_t length);
@@ -564,10 +819,6 @@ status_t USART_TransferCreateHandle(USART_Type *base,
  * returns directly without waiting for all data to be written to the TX register. When
  * all data is written to the TX register in the IRQ handler, the USART driver calls the callback
  * function and passes the @ref kStatus_USART_TxIdle as status parameter.
- *
- * @note The kStatus_USART_TxIdle is passed to the upper layer when all data is written
- * to the TX register. However it does not ensure that all data are sent out. Before disabling the TX,
- * check the kUSART_TransmissionCompleteFlag to ensure that the TX is finished.
  *
  * @param base USART peripheral base address.
  * @param handle USART handle pointer.
@@ -630,10 +881,9 @@ size_t USART_TransferGetRxRingBufferLength(usart_handle_t *handle);
 void USART_TransferAbortSend(USART_Type *base, usart_handle_t *handle);
 
 /*!
- * @brief Get the number of bytes that have been written to USART TX register.
+ * @brief Get the number of bytes that have been sent out to bus.
  *
- * This function gets the number of bytes that have been written to USART TX
- * register by interrupt method.
+ * This function gets the number of bytes that have been sent out to bus by interrupt method.
  *
  * @param base USART peripheral base address.
  * @param handle USART handle pointer.

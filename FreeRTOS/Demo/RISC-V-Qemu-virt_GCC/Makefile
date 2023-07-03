@@ -14,16 +14,17 @@ CPPFLAGS = \
 	-I $(RTOS_SOURCE_DIR)/include \
 	-I $(RTOS_SOURCE_DIR)/portable/GCC/RISC-V \
 	-I $(RTOS_SOURCE_DIR)/portable/GCC/RISC-V/chip_specific_extensions/RV32I_CLINT_no_extensions
-CFLAGS  = -march=rv32ima -mabi=ilp32 -mcmodel=medany \
+CFLAGS  = -march=rv32imac -mabi=ilp32 -mcmodel=medany \
 	-Wall \
 	-fmessage-length=0 \
 	-ffunction-sections \
 	-fdata-sections \
 	-fno-builtin-printf
-ASFLAGS = -march=rv32ima -mabi=ilp32 -mcmodel=medany
 LDFLAGS = -nostartfiles -Tfake_rom.lds \
+	-march=rv32imac -mabi=ilp32 -mcmodel=medany \
 	-Xlinker --gc-sections \
-	-Xlinker --defsym=__stack_size=300
+	-Xlinker --defsym=__stack_size=300 \
+	-Xlinker -Map=$(BUILD_DIR)/RTOSDemo.map
 
 ifeq ($(DEBUG), 1)
     CFLAGS += -Og -ggdb3
@@ -47,7 +48,7 @@ SRCS = main.c main_blinky.c riscv-virt.c ns16550.c \
 	$(RTOS_SOURCE_DIR)/portable/MemMang/heap_4.c \
 	$(RTOS_SOURCE_DIR)/portable/GCC/RISC-V/port.c
 
-ASMS = start.S \
+ASMS = start.S vector.S\
 	$(RTOS_SOURCE_DIR)/portable/GCC/RISC-V/portASM.S
 
 OBJS = $(SRCS:%.c=$(BUILD_DIR)/%.o) $(ASMS:%.S=$(BUILD_DIR)/%.o)
@@ -62,7 +63,7 @@ $(BUILD_DIR)/%.o: %.c Makefile
 
 $(BUILD_DIR)/%.o: %.S Makefile
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(ASFLAGS) -MMD -MP -c $< -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c $< -o $@
 
 clean:
 	rm -rf $(BUILD_DIR)

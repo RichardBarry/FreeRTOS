@@ -270,9 +270,12 @@ static void prvPublishCommandCallback( MQTTAgentCommandContext_t * pxCommandCont
         /* Send the context's ulNotificationValue as the notification value so
          * the receiving task can check the value it set in the context matches
          * the value it receives in the notification. */
-        xTaskNotify( pxCommandContext->xTaskToNotify,
+        if( xTaskNotify( pxCommandContext->xTaskToNotify,
                      pxCommandContext->ulNotificationValue,
-                     eSetValueWithOverwrite );
+                     eSetValueWithOverwrite ) != pdPASS )
+        {
+            LogError( ( "-- ERROR -- Task notification failed as notification already pending." ) );
+        }
     }
 }
 
@@ -305,7 +308,7 @@ static void prvSubscribeCommandCallback( void * pxCommandContext,
 
         if( xSubscriptionAdded == false )
         {
-            LogError( ( "Failed to register an incoming publish callback for topic %.*s.",
+            LogError( ( "-- ERROR -- Failed to register an incoming publish callback for topic %.*s.",
                         pxSubscribeArgs->pSubscribeInfo->topicFilterLength,
                         pxSubscribeArgs->pSubscribeInfo->pTopicFilter ) );
         }
@@ -353,7 +356,7 @@ static void prvIncomingPublishCallback( void * pvIncomingPublishCallbackContext,
         cTerminatedString[ mqttexampleSTRING_BUFFER_LENGTH - 1 ] = 0x00;
     }
 
-    LogInfo( ( "Received incoming publish message %s", cTerminatedString ) );
+    LogInfo( ( "Received incoming publish message \"%s\"", cTerminatedString ) );
 }
 
 /*-----------------------------------------------------------*/
@@ -427,7 +430,7 @@ static bool prvSubscribeToTopic( MQTTQoS_t xQoS,
     if( ( xCommandAcknowledged != pdTRUE ) ||
         ( xApplicationDefinedContext.xReturnStatus != MQTTSuccess ) )
     {
-        LogInfo( ( "Error or timed out waiting for ack to subscribe message topic %s",
+        LogError( ( "-- ERROR -- Error or timed out waiting for ack to subscribe message topic %s",
                    pcTopicFilter ) );
     }
     else
@@ -480,14 +483,14 @@ static bool prvSubscribeToTopicSync( MQTTQoS_t xQoS,
 
         if( xSubscriptionAdded == false )
         {
-            LogError( ( "Failed to register an incoming publish callback for topic %.*s.",
+            LogError( ( "-- ERROR -- Failed to register an incoming publish callback for topic %.*s.",
                         xSubscribeInfo.topicFilterLength,
                         pcTopicFilter ) );
         }
     }
     else
     {
-        LogInfo( ( "Failed to subscribe to %s - bad connection, MQTT agent queue full, or block time too short.", 
+        LogError( ( "-- ERROR -- Failed to subscribe to %s - bad connection, MQTT agent queue full, or block time too short.", 
                    pcTopicFilter ) );
     }
 
@@ -506,7 +509,6 @@ static void prvSimpleSubscribePublishTask( void * pvParameters )
     uint32_t ulNotification = 0U, ulValueToNotify = 0UL;
     MQTTStatus_t xCommandAdded;
     MQTTQoS_t xQoS;
-    TickType_t xTicksToDelay;
     MQTTAgentCommandInfo_t xCommandParams = { 0 };
     uint32_t ulTaskNumber = ( uint32_t )pvParameters;
     char * pcTopicBuffer = topicBuf[ ulTaskNumber ];
@@ -520,7 +522,7 @@ static void prvSimpleSubscribePublishTask( void * pvParameters )
     /* Create a topic name for this task to publish to. */
     snprintf( pcTopicBuffer, mqttexampleSTRING_BUFFER_LENGTH, "/filter/%s", pcTaskName );
 
-    LogInfo( ( "Task: %s: ---------STARTING DEMO---------\r\n", pcTaskName ) );
+    LogError( ( "Task: %s: ---------STARTING DEMO---------\r\n", pcTaskName ) ); /* Not actually an error, but demo progress logging. */
 
     /* Subscribe to the same topic to which this task will publish.  That will
      * result in each published message being published from the server back to
@@ -597,20 +599,28 @@ static void prvSimpleSubscribePublishTask( void * pvParameters )
             {
                 LogError( ( "-- ERROR -- Received %u, expected %u", ulNotification, ulValueToNotify ) );
             }
-
+            else
+            {
+                /* Print out an occasional progress message.  Not actually an
+                 * error, just useful to see the demo is executing. */
+                if( ( ulValueToNotify % 100 ) == 0UL )
+                {
+                    LogError( ( "Successfully sent and received up to %u", ulValueToNotify ) );
+                }
+            }
             /* Log statement to indicate successful reception of publish. */
             LogInfo( ( "Task: %s: Short delay before next iteration...", pcTaskName ) );
 
             /* Add a little randomness into the delay so the tasks don't remain
              * in lockstep. */
-//            xTicksToDelay = pdMS_TO_TICKS( mqttexampleDELAY_BETWEEN_PUBLISH_OPERATIONS_MS ) +
-//                            ( uxRand() % 0xff );
+            xTicksToDelay = pdMS_TO_TICKS( mqttexampleDELAY_BETWEEN_PUBLISH_OPERATIONS_MS ) +
+                            ( uxRand() % 0xff );
 
-//            vTaskDelay( xTicksToDelay );
+//_RB_            vTaskDelay( xTicksToDelay );
         }
     }
 
     /* Delete the task if it is complete. */
-    LogInfo( ( "Task %s completed.", pcTaskName ) );
+    LogError( ( "-- ERROR -- 'Task %s completed.", pcTaskName ) );
     vTaskDelete( NULL );
 }

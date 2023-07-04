@@ -46,7 +46,7 @@
 #endif
 
 #ifndef LIBRARY_LOG_LEVEL
-    #define LIBRARY_LOG_LEVEL    LOG_INFO
+    #define LIBRARY_LOG_LEVEL    LOG_WARN
 #endif
 
 /* Prototype for the function used to print to console on Windows simulator
@@ -95,7 +95,7 @@ extern void vLoggingPrintf( const char * pcFormatString,
  *
  * #define democonfigMQTT_BROKER_ENDPOINT				"insert here."
  */
-#define democonfigMQTT_BROKER_ENDPOINT "10.10.10.10"
+#define democonfigMQTT_BROKER_ENDPOINT "172.25.218.100"
 
 /**
  * @brief The port to use for the demo.
@@ -266,7 +266,7 @@ extern void vLoggingPrintf( const char * pcFormatString,
 /**
  * @brief The number of simple sub-pub tasks to create.
  */
-#define democonfigNUM_SIMPLE_SUB_PUB_TASKS_TO_CREATE    10
+#define democonfigNUM_SIMPLE_SUB_PUB_TASKS_TO_CREATE    1
 #define democonfigSIMPLE_SUB_PUB_TASK_STACK_SIZE        ( configMINIMAL_STACK_SIZE )
 
 /**

@@ -498,6 +498,37 @@ static bool prvSubscribeToTopicSync( MQTTQoS_t xQoS,
 }
 
 /*-----------------------------------------------------------*/
+
+MQTTStatus_t prvPublishAndWaitCommandComplete( MQTTAgentContext_t *pxGlobalMqttAgentContext,
+                                               MQTTPublishInfo_t *pxPublishInfo,
+                                               MQTTAgentCommandInfo_t *pxCommandParams,
+                                               uint32_t *pulReceivedValue )
+{
+    MQTTStatus_t xCommandAdded;
+
+    xCommandAdded = MQTTAgent_Publish( pxGlobalMqttAgentContext,
+                                        pxPublishInfo,
+                                        pxCommandParams );
+
+    if( xCommandAdded != MQTTSuccess )
+    {
+        LogError( ( "-- ERROR -- Failed to send publish request to agent - increase either the timeout or the length of the agent's command queue" ) );
+    }
+    else
+    {
+        /* For QoS 1 and 2, wait for the publish acknowledgment.  For QoS0,
+            * wait for the publish to be sent. */
+        LogInfo( ( "Task %s waiting for publish %d to complete.",
+                   pcTaskName,
+                   ulValueToNotify ) );
+
+        prvWaitForCommandAcknowledgment( pulReceivedValue );
+    }
+
+    return xCommandAdded;
+}
+/*-----------------------------------------------------------*/
+
 #define USE_SYNC_API 1
 
 static void prvSimpleSubscribePublishTask( void * pvParameters )
@@ -512,6 +543,7 @@ static void prvSimpleSubscribePublishTask( void * pvParameters )
     MQTTAgentCommandInfo_t xCommandParams = { 0 };
     uint32_t ulTaskNumber = ( uint32_t )pvParameters;
     char * pcTopicBuffer = topicBuf[ ulTaskNumber ];
+    TickType_t xTicksToDelay;
     
     pcTaskName = pcTaskGetName( NULL );
 
@@ -527,7 +559,7 @@ static void prvSimpleSubscribePublishTask( void * pvParameters )
     /* Subscribe to the same topic to which this task will publish.  That will
      * result in each published message being published from the server back to
      * the target. */
-#if USE_SYNC_API == 0
+#if ( USE_SYNC_API == 0 )
     prvSubscribeToTopic( xQoS, pcTopicBuffer );
 #else
     prvSubscribeToTopicSync( xQoS, pcTopicBuffer );
@@ -575,9 +607,17 @@ static void prvSimpleSubscribePublishTask( void * pvParameters )
          * as it is to be checked against the value sent from the callback.. */
         ulNotification = ~ulValueToNotify;
 
-        xCommandAdded = MQTTAgent_Publish( &xGlobalMqttAgentContext,
+#if ( USE_SYNC_API == 1 )
+        xCommandAdded =  prvPublishAndWaitCommandComplete( &xGlobalMqttAgentContext,
+                                                           &xPublishInfo,
+                                                           &xCommandParams,
+                                                           &ulNotification );
+#else
+    xCommandAdded = prvPublishToTopicSync( &xGlobalMqttAgentContext,
                                            &xPublishInfo,
                                            &xCommandParams );
+#endif
+
 
         if( xCommandAdded != MQTTSuccess )
         {
@@ -585,13 +625,6 @@ static void prvSimpleSubscribePublishTask( void * pvParameters )
         }
         else
         {
-            /* For QoS 1 and 2, wait for the publish acknowledgment.  For QoS0,
-             * wait for the publish to be sent. */
-            LogInfo( ( "Task %s waiting for publish %d to complete.",
-                       pcTaskName,
-                       ulValueToNotify ) );
-            prvWaitForCommandAcknowledgment( &ulNotification );
-
             /* The value received by the callback that executed when the publish was
              * completed came from the context passed into MQTTAgent_Publish() above,
              * so should match the value set in the context above. */

@@ -205,6 +205,14 @@ static bool prvSubscribeToTopic( MQTTQoS_t xQoS,
 static bool prvSubscribeToTopicSync( MQTTQoS_t xQoS,
                                      char* pcTopicFilter );
 
+/*_RB_ Comments TBD. */
+static MQTTStatus_t prvPublishAndWaitAck( MQTTAgentContext_t *pxGlobalMqttAgentContext,
+                                          MQTTPublishInfo_t *pxPublishInfo,
+                                          MQTTAgentCommandInfo_t *pxCommandParams,
+                                          uint32_t *pulReceivedValue );
+static MQTTStatus_t prvPublishAndWaitAckSync( MQTTAgentContext_t *pxGlobalMqttAgentContext,
+                                              MQTTPublishInfo_t *pxPublishInfo,
+                                              MQTTAgentCommandInfo_t *pxCommandParams );
 
 /**
  * @brief The function that implements the task demonstrated by this file.
@@ -459,7 +467,7 @@ static bool prvSubscribeToTopicSync( MQTTQoS_t xQoS,
     xSubscribeInfo.topicFilterLength = ( uint16_t )strlen( pcTopicFilter );
     xSubscribeInfo.qos = xQoS;
 
-    xSubscribeArgs.pSubscribeInfo = &xSubscribeInfo; /*_RB_ It's really clunky to have to pass this in like this. */
+    xSubscribeArgs.pSubscribeInfo = &xSubscribeInfo;
     xSubscribeArgs.numSubscriptions = 1; /*_RB_ Could this be determined inside the MQTT stack?  If not, the name of this structure member needs to make its purpose clearer. */
 
     LogInfo( ( "Sending subscribe request to agent for topic filter: %s", 
@@ -471,7 +479,9 @@ static bool prvSubscribeToTopicSync( MQTTQoS_t xQoS,
 
     if( xStatus == MQTTSuccess )
     {
-        LogInfo( ( "Subscribed to %s", pcTopicFilter ) );
+        /* Not an error, but use the error log as the output provides useful
+         * information on the demo's progress. */
+        LogError( ( "Subscribed to %s", pcTopicFilter ) );
 
         /* Add subscription so that incoming publishes are routed to the application
          * callback. */
@@ -499,16 +509,16 @@ static bool prvSubscribeToTopicSync( MQTTQoS_t xQoS,
 
 /*-----------------------------------------------------------*/
 
-MQTTStatus_t prvPublishAndWaitCommandComplete( MQTTAgentContext_t *pxGlobalMqttAgentContext,
-                                               MQTTPublishInfo_t *pxPublishInfo,
-                                               MQTTAgentCommandInfo_t *pxCommandParams,
-                                               uint32_t *pulReceivedValue )
+static MQTTStatus_t prvPublishAndWaitAck( MQTTAgentContext_t *pxGlobalMqttAgentContext,
+                                                      MQTTPublishInfo_t *pxPublishInfo,
+                                                      MQTTAgentCommandInfo_t *pxCommandParams,
+                                                      uint32_t *pulReceivedValue )
 {
     MQTTStatus_t xCommandAdded;
 
     xCommandAdded = MQTTAgent_Publish( pxGlobalMqttAgentContext,
-                                        pxPublishInfo,
-                                        pxCommandParams );
+                                       pxPublishInfo,
+                                       pxCommandParams );
 
     if( xCommandAdded != MQTTSuccess )
     {
@@ -529,6 +539,25 @@ MQTTStatus_t prvPublishAndWaitCommandComplete( MQTTAgentContext_t *pxGlobalMqttA
 }
 /*-----------------------------------------------------------*/
 
+static MQTTStatus_t prvPublishAndWaitAckSync( MQTTAgentContext_t *pxGlobalMqttAgentContext,
+                                              MQTTPublishInfo_t *pxPublishInfo,
+                                              MQTTAgentCommandInfo_t *pxCommandParams )
+{
+    MQTTStatus_t xCommandAdded;
+
+    xCommandAdded = MQTTAgent_PublishSync( pxGlobalMqttAgentContext,
+                                           pxPublishInfo,
+                                           mqttexampleMAX_COMMAND_SEND_BLOCK_TIME_MS );
+
+    if( xCommandAdded != MQTTSuccess )
+    {
+        LogError( ( "-- ERROR -- Failed to send publish request to agent - increase either the timeout or the length of the agent's command queue" ) );
+    }
+
+    return xCommandAdded;
+}
+/*-----------------------------------------------------------*/
+
 #define USE_SYNC_API 1
 
 static void prvSimpleSubscribePublishTask( void * pvParameters )
@@ -540,10 +569,10 @@ static void prvSimpleSubscribePublishTask( void * pvParameters )
     uint32_t ulNotification = 0U, ulValueToNotify = 0UL;
     MQTTStatus_t xCommandAdded;
     MQTTQoS_t xQoS;
-    MQTTAgentCommandInfo_t xCommandParams = { 0 };
     uint32_t ulTaskNumber = ( uint32_t )pvParameters;
     char * pcTopicBuffer = topicBuf[ ulTaskNumber ];
     TickType_t xTicksToDelay;
+    MQTTAgentCommandInfo_t xCommandParams = { 0 };
     
     pcTaskName = pcTaskGetName( NULL );
 
@@ -607,15 +636,16 @@ static void prvSimpleSubscribePublishTask( void * pvParameters )
          * as it is to be checked against the value sent from the callback.. */
         ulNotification = ~ulValueToNotify;
 
-#if ( USE_SYNC_API == 1 )
-        xCommandAdded =  prvPublishAndWaitCommandComplete( &xGlobalMqttAgentContext,
-                                                           &xPublishInfo,
-                                                           &xCommandParams,
-                                                           &ulNotification );
+
+#if ( USE_SYNC_API == 0 )
+        xCommandAdded =  prvPublishAndWaitAck( &xGlobalMqttAgentContext,
+                                               &xPublishInfo,
+                                               &xCommandParams,
+                                               &ulNotification );
 #else
-    xCommandAdded = prvPublishToTopicSync( &xGlobalMqttAgentContext,
-                                           &xPublishInfo,
-                                           &xCommandParams );
+        xCommandAdded =  prvPublishAndWaitAckSync( &xGlobalMqttAgentContext,
+                                                   &xPublishInfo,
+                                                   &xCommandParams );
 #endif
 
 
@@ -636,7 +666,7 @@ static void prvSimpleSubscribePublishTask( void * pvParameters )
             {
                 /* Print out an occasional progress message.  Not actually an
                  * error, just useful to see the demo is executing. */
-                if( ( ulValueToNotify % 100 ) == 0UL )
+                if( ( ulValueToNotify % 100UL ) == 1UL )
                 {
                     LogError( ( "Successfully sent and received up to %u", ulValueToNotify ) );
                 }

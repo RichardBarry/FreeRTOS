@@ -118,20 +118,22 @@ extern UBaseType_t uxRand( void );
 
 /**
  * @brief Passed into MQTTAgent_Subscribe() as the callback to execute when the
- * broker ACKs the SUBSCRIBE message.  Its implementation sends a notification
- * to the task that called MQTTAgent_Subscribe() to let the task know the
- * SUBSCRIBE operation completed.  It also sets the xReturnStatus of the
- * structure passed in as the command's context to the value of the
- * xReturnStatus parameter - which enables the task to check the status of the
- * operation.
+ * broker ACKs the SUBSCRIBE message when using the asyncrhonous MQTT agent
+ * subscribe API.  Its implementation sends a notification to the task that 
+ * called MQTTAgent_Subscribe() to let the task know the SUBSCRIBE operation 
+ * completed.  It also sets the xReturnStatus of the structure passed in as the 
+ * command's context to the value of the xReturnStatus parameter - which enables 
+ * the task to check the status of the operation.  This is done internally
+ * within the MQTT agent task when using the synchronous MQTT agent subscribe
+ * API MQTTAgent_SubscribeSync().
  *
  * See https://freertos.org/mqtt/mqtt-agent-demo.html#example_mqtt_api_call
  *
  * @param[in] pxCommandContext Context of the initial command.
  * @param[in].xReturnStatus The result of the command.
  */
-static void prvSubscribeCommandCallback( void * pxCommandContext,
-                                         MQTTAgentReturnInfo_t * pxReturnInfo );
+static void prvSubscribeCommandCallbackAsync( void * pxCommandContext,
+                                              MQTTAgentReturnInfo_t * pxReturnInfo );
 
 /**
  * @brief Passed into MQTTAgent_Publish() as the callback to execute when the
@@ -180,16 +182,17 @@ static void prvIncomingPublishCallback( void * pvIncomingPublishCallbackContext,
                                         MQTTPublishInfo_t * pxPublishInfo );
 
 /**
- * @brief Subscribe to the topic the demo task will also publish to - that
- * results in all outgoing publishes being published back to the task
- * (effectively echoed back).
+ * @brief Subscribe to the topic the demo task will also publish to using
+ * the MQTT agent's asynchrounous  - subscribing to the topic the task also
+ * publishes too should result in every outgoing publish task be published by
+ * the MQTT broker back to the calling task.(effectively echoed back).
  *
  * @param[in] xQoS The quality of service (QoS) to use.  Can be zero or one
  * for all MQTT brokers.  Can also be QoS2 if supported by the broker.  AWS IoT
  * does not support QoS2.
  */
-static bool prvSubscribeToTopic( MQTTQoS_t xQoS,
-                                 char * pcTopicFilter );
+static bool prvSubscribeToTopicAsync( MQTTQoS_t xQoS,
+                                      char * pcTopicFilter );
 
 /**
  * @brief Subscribe to the topic the demo task will also publish to using the
@@ -239,27 +242,25 @@ static char topicBuf[ democonfigNUM_SIMPLE_SUB_PUB_TASKS_TO_CREATE ][ mqttexampl
 
 /*-----------------------------------------------------------*/
 
-void vStartSimpleSubscribePublishTask( uint32_t ulNumberToCreate,
-                                       configSTACK_DEPTH_TYPE uxStackSize,
-                                       UBaseType_t uxPriority )
+void vStartSimpleSubscribePublishTask( void )
 {
     char pcTaskNameBuf[ 15 ];
     uint32_t ulTaskNumber;
 
-    /* Each instance of prvSimpleSubscribePublishTask() generates a unique name
-     * and topic filter for itself from the number passed in as the task
-     * parameter. */
     /* Create a few instances of vSimpleSubscribePublishTask(). */
-    for( ulTaskNumber = 0; ulTaskNumber < ulNumberToCreate; ulTaskNumber++ )
+    for( ulTaskNumber = 0; ulTaskNumber < democonfigNUM_SIMPLE_SUB_PUB_TASKS_TO_CREATE; ulTaskNumber++ )
     {
+        /* Each instance of prvSimpleSubscribePublishTask() generates a unique name
+         * and topic filter for itself from the number passed in as the task
+         * parameter. */
         memset( pcTaskNameBuf, 0x00, sizeof( pcTaskNameBuf ) );
         snprintf( pcTaskNameBuf, 10, "SubPub%d", ( int ) ulTaskNumber );
 
         xTaskCreate( prvSimpleSubscribePublishTask,
                      pcTaskNameBuf,
-                     uxStackSize,
+                     democonfigSIMPLE_SUB_PUB_TASK_STACK_SIZE,
                      ( void * ) ulTaskNumber,
-                     uxPriority,
+                     tskIDLE_PRIORITY,
                      NULL );
     }
 }
@@ -289,8 +290,8 @@ static void prvPublishCommandCallback( MQTTAgentCommandContext_t * pxCommandCont
 
 /*-----------------------------------------------------------*/
 
-static void prvSubscribeCommandCallback( void * pxCommandContext,
-                                         MQTTAgentReturnInfo_t * pxReturnInfo )
+static void prvSubscribeCommandCallbackAsync( void * pxCommandContext,
+                                              MQTTAgentReturnInfo_t * pxReturnInfo )
 {
     bool xSubscriptionAdded = false;
     MQTTAgentCommandContext_t * pxApplicationDefinedContext = ( MQTTAgentCommandContext_t * ) pxCommandContext;
@@ -322,9 +323,12 @@ static void prvSubscribeCommandCallback( void * pxCommandContext,
         }
     }
 
-    xTaskNotify( pxApplicationDefinedContext->xTaskToNotify,
-                 ( uint32_t ) ( pxReturnInfo->returnCode ),
-                 eSetValueWithOverwrite );
+    if( xTaskNotify( pxApplicationDefinedContext->xTaskToNotify,
+                    ( uint32_t ) ( pxReturnInfo->returnCode ),
+                    eSetValueWithoutOverwrite ) != pdPASS )
+    {
+        LogError( ( "---ERROR--- Subscribe callback failed to notify waiting task as the waitng task already had a notification pending. "));
+    }
 }
 
 /*-----------------------------------------------------------*/
@@ -409,7 +413,7 @@ static bool prvSubscribeToTopic( MQTTQoS_t xQoS,
     xApplicationDefinedContext.pArgs = ( void * ) &xSubscribeArgs;
 
     xCommandParams.blockTimeMs = mqttexampleMAX_COMMAND_SEND_BLOCK_TIME_MS;
-    xCommandParams.cmdCompleteCallback = prvSubscribeCommandCallback;
+    xCommandParams.cmdCompleteCallback = prvSubscribeCommandCallbackAsync;
     xCommandParams.pCmdCompleteCallbackContext = ( void * ) &xApplicationDefinedContext;
 
     /* Loop in case the queue used to communicate with the MQTT agent is full and
@@ -558,8 +562,6 @@ static MQTTStatus_t prvPublishAndWaitAckSync( MQTTAgentContext_t *pxGlobalMqttAg
 }
 /*-----------------------------------------------------------*/
 
-#define USE_SYNC_API 1
-
 static void prvSimpleSubscribePublishTask( void * pvParameters )
 {
     MQTTPublishInfo_t xPublishInfo = { 0 };
@@ -588,7 +590,7 @@ static void prvSimpleSubscribePublishTask( void * pvParameters )
     /* Subscribe to the same topic to which this task will publish.  That will
      * result in each published message being published from the server back to
      * the target. */
-#if ( USE_SYNC_API == 0 )
+#if ( democonfigUSE_SYNC_API == 0 )
     prvSubscribeToTopic( xQoS, pcTopicBuffer );
 #else
     prvSubscribeToTopicSync( xQoS, pcTopicBuffer );
@@ -637,7 +639,7 @@ static void prvSimpleSubscribePublishTask( void * pvParameters )
         ulNotification = ~ulValueToNotify;
 
 
-#if ( USE_SYNC_API == 0 )
+#if ( democonfigUSE_SYNC_API == 0 )
         xCommandAdded =  prvPublishAndWaitAck( &xGlobalMqttAgentContext,
                                                &xPublishInfo,
                                                &xCommandParams,

@@ -413,9 +413,7 @@ static void prvConnectToMQTTBroker( void );
  * Functions that start the tasks demonstrated by this project.
  */
 
-extern void vStartSimpleSubscribePublishTask( uint32_t ulTaskNumber,
-                                              configSTACK_DEPTH_TYPE uxStackSize,
-                                              UBaseType_t uxPriority );
+extern void vStartSimpleSubscribePublishTask( void );
 
 /*-----------------------------------------------------------*/
 
@@ -1040,9 +1038,7 @@ static void prvConnectAndCreateDemoTasks( void * pvParameters )
 
     #if ( democonfigNUM_SIMPLE_SUB_PUB_TASKS_TO_CREATE > 0 )
         {
-            vStartSimpleSubscribePublishTask( democonfigNUM_SIMPLE_SUB_PUB_TASKS_TO_CREATE,
-                                              democonfigSIMPLE_SUB_PUB_TASK_STACK_SIZE,
-                                              tskIDLE_PRIORITY );
+            vStartSimpleSubscribePublishTask();
         }
     #endif
 

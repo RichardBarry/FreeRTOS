@@ -66,6 +66,9 @@ extern void vLoggingPrintf( const char * pcFormatString,
 
 /************ End of logging configuration ****************/
 
+/*_RB_ TBD comments. */
+#define democonfigUSE_SYNC_API 1
+
 /**
  * @brief The MQTT client identifier used in this example.  Each client identifier
  * must be unique so edit as required to ensure no two clients connecting to the
@@ -76,7 +79,7 @@ extern void vLoggingPrintf( const char * pcFormatString,
  *!!! be read by software, such as a production serial number, instead of a
  *!!! hard coded constant.
  *
- * #define democonfigCLIENT_IDENTIFIER				"insert here."
+ * #define democonfigCLIENT_IDENTIFIER                "insert here."
  */
 #define democonfigCLIENT_IDENTIFIER "agent_test"
 
@@ -93,7 +96,7 @@ extern void vLoggingPrintf( const char * pcFormatString,
  * Settings/Custom Endpoint, or using the describe-endpoint REST API (with
  * AWS CLI command line tool).
  *
- * #define democonfigMQTT_BROKER_ENDPOINT				"insert here."
+ * #define democonfigMQTT_BROKER_ENDPOINT                "insert here."
  */
 #define democonfigMQTT_BROKER_ENDPOINT "172.25.218.100"
 

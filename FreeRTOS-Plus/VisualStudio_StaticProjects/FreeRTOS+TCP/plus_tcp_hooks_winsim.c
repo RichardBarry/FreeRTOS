@@ -166,7 +166,7 @@ void vPlatformInitIpStack( void )
     uint8_t ucMACAddress[ 6 ];
     uint8_t ucDNSServerAddress[ 4 ];
     uint8_t ucGatewayAddress[ 4 ];
-
+/*_RB_ Should any of the above variables be static? */
     ucMACAddress[ 0 ] = configMAC_ADDR0;
     ucMACAddress[ 1 ] = configMAC_ADDR1;
     ucMACAddress[ 2 ] = configMAC_ADDR2;

@@ -449,8 +449,6 @@ MQTTAgentContext_t xGlobalMqttAgentContext;
 
 static uint8_t xNetworkBuffer[ MQTT_AGENT_NETWORK_BUFFER_SIZE ];
 
-static MQTTAgentMessageContext_t xCommandQueue;
-
 /**
  * @brief The global array of subscription elements.
  *
@@ -491,20 +489,13 @@ static MQTTStatus_t prvMQTTInit( void )
     static StaticQueue_t staticQueueStructure;
     MQTTAgentMessageInterface_t messageInterface =
     {
-        .pMsgCtx        = NULL,
-        .send           = Agent_MessageSend,
-        .recv           = Agent_MessageReceive,
         .getCommand     = Agent_GetCommand,
         .releaseCommand = Agent_ReleaseCommand
     };
 
     LogDebug( ( "Creating command queue." ) );
-    xCommandQueue.queue = xQueueCreate( MQTT_AGENT_COMMAND_QUEUE_LENGTH,
-                                        sizeof( MQTTAgentCommand_t * ) );
-    configASSERT( xCommandQueue.queue );
-    messageInterface.pMsgCtx = &xCommandQueue;
 
-    /* Initialize the task pool. */
+    /* Initialize the command structure pool. */
     Agent_InitializePool();
 
     /* Fill in Transport Interface send and receive function pointers. */
@@ -516,7 +507,7 @@ static MQTTStatus_t prvMQTTInit( void )
     #else
         xTransport.send = Plaintext_FreeRTOS_send;
         xTransport.recv = Plaintext_FreeRTOS_recv;
-        xTransport.writev = NULL;
+        xTransport.writev = NULL; /*_RB_Really need to change the name of this pointer. */
     #endif
 
     /* Initialize MQTT library. */
@@ -885,6 +876,8 @@ static BaseType_t prvSocketDisconnect( NetworkContext_t * pxNetworkContext )
 
 static void prvMQTTClientSocketWakeupCallback( Socket_t pxSocket )
 {
+    extern TaskHandle_t xMQTTAgentTask; /*_RB_ Should not use global here. */
+
     MQTTAgentCommandInfo_t xCommandParams = { 0 };
 
     /* Just to avoid compiler warnings.  The socket is not used but the function
@@ -893,11 +886,15 @@ static void prvMQTTClientSocketWakeupCallback( Socket_t pxSocket )
 
     /* A socket used by the MQTT task may need attention.  Send an event
      * to the MQTT task to make sure the task is not blocked on xCommandQueue. */
-    if( ( uxQueueMessagesWaiting( xCommandQueue.queue ) == 0U ) && ( FreeRTOS_recvcount( pxSocket ) > 0 ) )
+    if( ( uxQueueMessagesWaiting( xGlobalMqttAgentContext.commandQueue ) == 0U ) && ( FreeRTOS_recvcount( pxSocket ) > 0 ) )
     {
         /* Don't block as this is called from the context of the IP task. */
         xCommandParams.blockTimeMs = 0U;
-        MQTTAgent_ProcessLoop( &xGlobalMqttAgentContext, &xCommandParams );
+
+        if( xMQTTAgentTask != NULL )
+        {
+            xTaskAbortDelay( xMQTTAgentTask );
+        }
     }
 }
 
@@ -1000,7 +997,7 @@ static void prvConnectToMQTTBroker( void )
     configASSERT( xMQTTStatus == MQTTSuccess );
 
     /* Form an MQTT connection without a persistent session. */
-    xMQTTStatus = prvMQTTConnect( true );
+    xMQTTStatus = prvMQTTConnect( true );/*_RB_ Persistent session can be optional. */
     configASSERT( xMQTTStatus == MQTTSuccess );
 }
 /*-----------------------------------------------------------*/

@@ -35,7 +35,7 @@
 
 /* Kernel includes. */
 #include "FreeRTOS.h"
-#include "semphr.h"
+#include "queue.h"
 
 /* Header include. */
 #include "freertos_command_pool.h"
@@ -74,7 +74,6 @@ void Agent_InitializePool( void )
     MQTTAgentCommand_t * pCommand;
     static uint8_t staticQueueStorageArea[ MQTT_COMMAND_CONTEXTS_POOL_SIZE * sizeof( MQTTAgentCommand_t * ) ];
     static StaticQueue_t staticQueueStructure;
-    bool commandAdded = false;
 
     if( initStatus == QUEUE_NOT_INITIALIZED )
     {
@@ -88,9 +87,9 @@ void Agent_InitializePool( void )
         {
             /* Store the address as a variable. */
             pCommand = &commandStructurePool[ i ];
-            /* Send the pointer to the queue. */
-            commandAdded = Agent_MessageSend( &commandStructMessageCtx, &pCommand, 0U );
-            configASSERT( commandAdded );
+            /* Send the pointer to the queue. Should never fail as the
+            loop counter and queue size use the same constant. */
+            xQueueSend( commandStructMessageCtx.queue, &pCommand, pdMS_TO_TICKS( 0 ) ); /*_RB_ The queue is the only member of the structure. */
         }
 
         initStatus = QUEUE_INITIALIZED;
@@ -102,15 +101,15 @@ void Agent_InitializePool( void )
 MQTTAgentCommand_t * Agent_GetCommand( uint32_t blockTimeMs )
 {
     MQTTAgentCommand_t * structToUse = NULL;
-    bool structRetrieved = false;
+    BaseType_t structRetrieved = false;
 
     /* Check queue has been created. */
     configASSERT( initStatus == QUEUE_INITIALIZED );
 
     /* Retrieve a struct from the queue. */
-    structRetrieved = Agent_MessageReceive( &commandStructMessageCtx, &( structToUse ), blockTimeMs );
+    structRetrieved = xQueueReceive( commandStructMessageCtx.queue, &( structToUse ), blockTimeMs );
 
-    if( !structRetrieved )
+    if( structRetrieved != pdPASS )
     {
         LogError( ( "No command structure available." ) );
     }
@@ -130,7 +129,9 @@ bool Agent_ReleaseCommand( MQTTAgentCommand_t * pCommandToRelease )
     if( ( pCommandToRelease >= commandStructurePool ) &&
         ( pCommandToRelease < ( commandStructurePool + MQTT_COMMAND_CONTEXTS_POOL_SIZE ) ) )
     {
-        structReturned = Agent_MessageSend( &commandStructMessageCtx, &pCommandToRelease, 0U );
+        /* A block time of zero is ok here because there are as many structures
+         * as there are spaces in the queue. *//*_RB_Note about writing useful comments. */
+        structReturned = xQueueSend( commandStructMessageCtx.queue, &pCommandToRelease , 0U );
 
         /* The send should not fail as the queue was created to hold every command
          * in the pool. */

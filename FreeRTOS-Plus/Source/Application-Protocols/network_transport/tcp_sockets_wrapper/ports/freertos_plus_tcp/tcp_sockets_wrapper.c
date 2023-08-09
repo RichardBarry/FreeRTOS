@@ -237,7 +237,7 @@ int32_t TCP_Sockets_Send( Socket_t xSocket,
     configASSERT( xSocket != NULL );
     configASSERT( pvBuffer != NULL );
 
-    xSendStatus = FreeRTOS_send( xSocket, pvBuffer, xBufferLength, 0 );
+    xSendStatus = FreeRTOS_send( xSocket, pvBuffer, xBufferLength, 0U );
 
     switch( xSendStatus )
     {
@@ -301,7 +301,7 @@ int32_t TCP_Sockets_Recv( Socket_t xSocket,
     configASSERT( xSocket != NULL );
     configASSERT( pvBuffer != NULL );
 
-    xRecvStatus = FreeRTOS_recv( xSocket, pvBuffer, xBufferLength, 0 );
+    xRecvStatus = FreeRTOS_recv( xSocket, pvBuffer, xBufferLength, 0U );
 
     switch( xRecvStatus )
     {

@@ -186,7 +186,6 @@
     <ClCompile Include="..\..\..\Source\Application-Protocols\network_transport\transport_mbedtls.c" />
     <ClCompile Include="..\..\..\Source\Application-Protocols\network_transport\transport_plaintext.c" />
     <ClCompile Include="..\..\..\Source\Utilities\backoff_algorithm\source\backoff_algorithm.c" />
-    <ClCompile Include="..\..\Common\coreMQTT_Agent_Interface\freertos_command_pool.c" />
     <ClCompile Include="..\Common\main.c" />
     <ClCompile Include="DemoTasks\mqtt-agent-task.c" />
     <ClCompile Include="DemoTasks\simple_sub_pub_demo.c" />

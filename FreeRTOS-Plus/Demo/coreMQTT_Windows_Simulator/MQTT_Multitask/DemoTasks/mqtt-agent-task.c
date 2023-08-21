@@ -74,9 +74,6 @@
 /* MQTT agent include. */
 #include "core_mqtt_agent.h"
 
-/* MQTT Agent ports. */
-#include "freertos_agent_message.h"
-
 /* Exponential backoff retry include. */
 #include "backoff_algorithm.h"
 

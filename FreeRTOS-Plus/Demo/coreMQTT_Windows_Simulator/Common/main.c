@@ -84,7 +84,6 @@ int main( void )
      * timer tasks to be created.  See the memory management section on the
      * FreeRTOS web site for more details.
      */
-
     for( ; ; )
     {
         configASSERT( pdFALSE );

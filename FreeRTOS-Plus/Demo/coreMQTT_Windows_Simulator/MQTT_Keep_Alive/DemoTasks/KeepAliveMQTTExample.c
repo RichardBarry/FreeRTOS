@@ -59,6 +59,9 @@
 #include "task.h"
 #include "timers.h"
 
+/* FreeRTOS+TCP includes. */
+#include "FreeRTOS_IP.h"
+
 /* Demo Specific configs. */
 #include "demo_config.h"
 

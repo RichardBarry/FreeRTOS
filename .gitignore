@@ -32,7 +32,6 @@ CWSettingsWindows.stg
 .vs/
 
 # Visual Studio Solution / project User Option files
-*.suo
 *.vcxproj.user
 
 # Python Tools for Visual Studio (PTVS)

@@ -177,6 +177,10 @@ void vPlatformInitIpStack( void )
     uint8_t ucDNSServerAddress[ 4 ];
     uint8_t ucGatewayAddress[ 4 ];
 
+    extern NetworkInterface_t * pxWinPcap_FillInterfaceDescriptor( BaseType_t xEMACIndex,
+                                                                   NetworkInterface_t * pxInterface );
+
+
     ucMACAddress[ 0 ] = configMAC_ADDR0;
     ucMACAddress[ 1 ] = configMAC_ADDR1;
     ucMACAddress[ 2 ] = configMAC_ADDR2;

@@ -193,7 +193,7 @@ void vLoggingInit( BaseType_t xLogToStdout,
                 #endif /* defined( ipconfigIPv4_BACKWARD_COMPATIBLE ) && ( ipconfigIPv4_BACKWARD_COMPATIBLE == 0 ) */
 
                 xPrintUDPAddress.sin_family = FREERTOS_AF_INET;
-                
+
             }
 
             /* If a disk file or stdout are to be used then Win32 system calls will
@@ -210,7 +210,7 @@ void vLoggingInit( BaseType_t xLogToStdout,
                 xLogStreamBuffer->LENGTH = dlLOGGING_STREAM_BUFFER_SIZE + 1;
 
                 /* Create the Windows event. */
-                pvLoggingThreadEvent = CreateEvent( NULL, FALSE, TRUE, "StdoutLoggingEvent" );
+                pvLoggingThreadEvent = CreateEvent( NULL, FALSE, TRUE, (LPCWSTR) "StdoutLoggingEvent" );
 
                 /* Create the thread itself. */
                 Win32Thread = CreateThread(

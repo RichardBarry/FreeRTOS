@@ -434,7 +434,6 @@
     <ClInclude Include="..\..\ThirdParty\winpcap\include\pcap-stdinc.h">
       <Filter>Network Interface\winpcap\include</Filter>
     </ClInclude>
-    <ClInclude Include="FreeRTOSIPConfig.h" />
     <ClInclude Include="..\..\ThirdParty\winpcap\include\pcap\pcap.h">
       <Filter>Network Interface\winpcap\include\pcap</Filter>
     </ClInclude>

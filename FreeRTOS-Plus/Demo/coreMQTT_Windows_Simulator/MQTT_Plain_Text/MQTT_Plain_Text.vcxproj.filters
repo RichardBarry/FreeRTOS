@@ -14,14 +14,6 @@
       <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
       <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
     </Filter>
-    <Filter Include="Config">
-      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
-      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
-    </Filter>
-    <Filter Include="Header">
-      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
-      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
-    </Filter>
     <Filter Include="Additional Network Transport Files">
       <UniqueIdentifier>{a1ecf026-d7ca-488c-bf1f-fd90a038a04a}</UniqueIdentifier>
     </Filter>
@@ -45,6 +37,10 @@
     </Filter>
     <Filter Include="Additional Network Transport Files\PlaintextTransport\include">
       <UniqueIdentifier>{c63ec790-9f1f-485b-9c8c-30727bdb38ab}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Configuration Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -74,9 +70,6 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\Common\core_mqtt_config.h">
-      <Filter>Header</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\..\Source\Application-Protocols\coreMQTT\source\include\core_mqtt.h">
       <Filter>Libraries\coreMQTT\include</Filter>
     </ClInclude>
@@ -93,13 +86,22 @@
       <Filter>Libraries\Backoff Algorithm\include</Filter>
     </ClInclude>
     <ClInclude Include="demo_config.h">
-      <Filter>Config</Filter>
+      <Filter>Configuration Files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\Source\Application-Protocols\network_transport\tcp_sockets_wrapper\include\tcp_sockets_wrapper.h">
       <Filter>Additional Network Transport Files\TCP Sockets Wrapper\include</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\Source\Application-Protocols\network_transport\transport_plaintext.h">
       <Filter>Additional Network Transport Files\PlaintextTransport\include</Filter>
+    </ClInclude>
+    <ClInclude Include="FreeRTOSConfig.h">
+      <Filter>Configuration Files</Filter>
+    </ClInclude>
+    <ClInclude Include="FreeRTOSIPConfig.h">
+      <Filter>Configuration Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Common\core_mqtt_config.h">
+      <Filter>Configuration Files</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

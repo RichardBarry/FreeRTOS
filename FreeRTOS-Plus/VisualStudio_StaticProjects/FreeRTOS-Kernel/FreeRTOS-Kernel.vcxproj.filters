@@ -60,7 +60,6 @@
     <ClInclude Include="..\..\..\FreeRTOS\Source\include\FreeRTOS.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="FreeRTOSConfig.h" />
     <ClInclude Include="..\..\..\FreeRTOS\Source\portable\MSVC-MingW\portmacro.h" />
   </ItemGroup>
   <ItemGroup>

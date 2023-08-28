@@ -46,6 +46,5 @@
     <ClInclude Include="..\..\Source\Application-Protocols\coreHTTP\source\interface\transport_interface.h">
       <Filter>coreHTTP</Filter>
     </ClInclude>
-    <ClInclude Include="core_http_config.h" />
   </ItemGroup>
 </Project>

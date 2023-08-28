@@ -64,6 +64,9 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
+/* FreeRTOS+TCP includes. */
+#include "FreeRTOS_IP.h"
+
 /* Demo Specific configs. */
 #include "demo_config.h"
 
@@ -476,7 +479,7 @@ static JSONStatus_t prvParseCredentials( HTTPResponse_t * pxResponse,
  * @return pdPASS on success, pdFAIL on failure.
  */
 static BaseType_t prvGetTemporaryCredentials( TransportInterface_t * pxTransportInterface,
-                                              const char * pcDateISO8601,
+                                              char * pcDateISO8601,
                                               size_t xDateISO8601Len,
                                               HTTPResponse_t * pxResponse,
                                               SigV4Credentials_t * pxSigvCreds );
@@ -1177,7 +1180,7 @@ static BaseType_t prvDownloadS3ObjectFile( const TransportInterface_t * pxTransp
 }
 
 static BaseType_t prvGetTemporaryCredentials( TransportInterface_t * pxTransportInterface,
-                                              const char * pcDateISO8601,
+                                              char * pcDateISO8601,
                                               size_t xDateISO8601Len,
                                               HTTPResponse_t * pxResponse,
                                               SigV4Credentials_t * pxSigvCreds )

@@ -49,7 +49,7 @@
     <Filter Include="Additional Network Transport Files\TCP Sockets Wrapper\ports\freertos_plus_tcp">
       <UniqueIdentifier>{a8eba8dd-9a44-4f49-bba8-496c4f331583}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Config">
+    <Filter Include="Configuration Files">
       <UniqueIdentifier>{7f50cafc-290c-481a-968f-a80b87cd8f83}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
@@ -117,7 +117,16 @@
       <Filter>Additional Network Transport Files\TCP Sockets Wrapper\include</Filter>
     </ClInclude>
     <ClInclude Include="demo_config.h">
-      <Filter>Config</Filter>
+      <Filter>Configuration Files</Filter>
+    </ClInclude>
+    <ClInclude Include="core_http_config.h">
+      <Filter>Configuration Files</Filter>
+    </ClInclude>
+    <ClInclude Include="FreeRTOSConfig.h">
+      <Filter>Configuration Files</Filter>
+    </ClInclude>
+    <ClInclude Include="FreeRTOSIPConfig.h">
+      <Filter>Configuration Files</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

@@ -33,9 +33,6 @@
     <Filter Include="Additional Libraries\coreMQTT-Agent\interface">
       <UniqueIdentifier>{2cbd459d-09be-4169-9880-5eeec1539a82}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Config">
-      <UniqueIdentifier>{eba01140-0f72-4f5d-a8c2-431c6c426c6b}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Additional Network Transport Files">
       <UniqueIdentifier>{21c3aeda-e0b6-41cd-9017-e21d1c34d696}</UniqueIdentifier>
     </Filter>
@@ -54,12 +51,12 @@
     <Filter Include="Additional Network Transport Files\TCP Sockets Wrapper\ports">
       <UniqueIdentifier>{4202753e-a139-4b7b-a7d3-00d97c2fd4f6}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Configuration Files">
+      <UniqueIdentifier>{eba01140-0f72-4f5d-a8c2-431c6c426c6b}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="subscription-manager\subscription_manager.h">
-      <Filter>Headers</Filter>
-    </ClInclude>
-    <ClInclude Include="..\Common\core_mqtt_config.h">
       <Filter>Headers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\Source\Application-Protocols\coreMQTT-Agent\source\include\core_mqtt_agent.h">
@@ -93,7 +90,7 @@
       <Filter>Additional Libraries\coreMQTT-Agent\interface</Filter>
     </ClInclude>
     <ClInclude Include="demo_config.h">
-      <Filter>Config</Filter>
+      <Filter>Configuration Files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\Source\Application-Protocols\network_transport\mbedtls_bio_tcp_sockets_wrapper.h">
       <Filter>Additional Network Transport Files\TCP Sockets Wrapper + MbedTLS Transport\include</Filter>
@@ -106,6 +103,15 @@
     </ClInclude>
     <ClInclude Include="..\..\..\Source\Application-Protocols\network_transport\tcp_sockets_wrapper\include\tcp_sockets_wrapper.h">
       <Filter>Additional Network Transport Files\TCP Sockets Wrapper\include</Filter>
+    </ClInclude>
+    <ClInclude Include="core_mqtt_config.h">
+      <Filter>Configuration Files</Filter>
+    </ClInclude>
+    <ClInclude Include="FreeRTOSConfig.h">
+      <Filter>Configuration Files</Filter>
+    </ClInclude>
+    <ClInclude Include="FreeRTOSIPConfig.h">
+      <Filter>Configuration Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

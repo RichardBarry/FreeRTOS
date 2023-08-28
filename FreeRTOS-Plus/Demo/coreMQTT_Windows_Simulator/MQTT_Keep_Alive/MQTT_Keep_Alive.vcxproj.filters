@@ -5,10 +5,6 @@
       <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
       <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
     </Filter>
-    <Filter Include="Header">
-      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
-      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
-    </Filter>
     <Filter Include="Additional Libraries">
       <UniqueIdentifier>{ca85e3b4-48b5-41e3-b78e-0969dcbb4014}</UniqueIdentifier>
     </Filter>
@@ -27,9 +23,6 @@
     <Filter Include="Additional Network Transport Files">
       <UniqueIdentifier>{628e3184-4ee7-4597-a6f3-406e6fb32fd0}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Config">
-      <UniqueIdentifier>{1e47e29c-64f2-485d-843c-bf6cebd04529}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Additional Network Transport Files\TCP Sockets Wrapper">
       <UniqueIdentifier>{be34c1eb-2b93-4475-90e9-fe1681790d11}</UniqueIdentifier>
     </Filter>
@@ -44,6 +37,9 @@
     </Filter>
     <Filter Include="Additional Network Transport Files\TCP Sockets Wrapper + MbedTLS Transport\include">
       <UniqueIdentifier>{7c4a1006-eb8b-43a6-a876-b0bafaf2e380}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Config Files">
+      <UniqueIdentifier>{1e47e29c-64f2-485d-843c-bf6cebd04529}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -62,17 +58,23 @@
     <ClInclude Include="..\..\..\Source\Utilities\backoff_algorithm\source\include\backoff_algorithm.h">
       <Filter>Additional Libraries\backoff_algorithm\include</Filter>
     </ClInclude>
-    <ClInclude Include="..\Common\core_mqtt_config.h">
-      <Filter>Header</Filter>
-    </ClInclude>
     <ClInclude Include="demo_config.h">
-      <Filter>Config</Filter>
+      <Filter>Config Files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\Source\Application-Protocols\network_transport\tcp_sockets_wrapper\include\tcp_sockets_wrapper.h">
       <Filter>Additional Network Transport Files\TCP Sockets Wrapper\include</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\Source\Application-Protocols\network_transport\transport_plaintext.h">
       <Filter>Additional Network Transport Files\TCP Sockets Wrapper + MbedTLS Transport\include</Filter>
+    </ClInclude>
+    <ClInclude Include="core_mqtt_config.h">
+      <Filter>Config Files</Filter>
+    </ClInclude>
+    <ClInclude Include="FreeRTOSConfig.h">
+      <Filter>Config Files</Filter>
+    </ClInclude>
+    <ClInclude Include="FreeRTOSIPConfig.h">
+      <Filter>Config Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
